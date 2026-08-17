@@ -1,2 +1,3 @@
 export * from './SystemIntegrityHUD';
-export { default } from './SystemIntegrityHUD';
+export * from './QuestHUD';
+export { QuestHUD } from './QuestHUD';

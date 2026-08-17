@@ -15,8 +15,6 @@ import {
   MousePointer, 
   Radio,
   Sparkles,
-  Target,
-  CheckCircle2,
   Activity,
   AlertTriangle,
   Save,
@@ -29,6 +27,7 @@ import { ScreenDistortion } from '../../game/Effects/ScreenDistortion';
 import { CorruptedText } from '../../game/Effects/CorruptedText';
 import { WarningOverlay } from '../../game/Effects/WarningOverlay';
 import { SystemIntegrityHUD } from '../../components/HUD/SystemIntegrityHUD';
+import { QuestHUD } from '../../components/HUD/QuestHUD';
 import { SystemFailure } from '../../components/SystemFailure/SystemFailure';
 import { SaveLoadModal } from '../../components/SaveLoadModal/SaveLoadModal';
 import { useGameWebSocket } from '../../hooks/useGameWebSocket';
@@ -46,7 +45,6 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
   // Centralized Zustand World State
   const playerPosition = useWorldStore((state) => state.playerPosition);
-  const currentObjective = useWorldStore((state) => state.currentObjective);
   const isDoorUnlocked = !useWorldStore((state) => state.door_01.locked);
   const notifications = useWorldStore((state) => state.notifications);
   const dismissNotification = useWorldStore((state) => state.dismissNotification);
@@ -241,29 +239,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
       {/* TACTICAL OBJECTIVE TRACKER & SYSTEM INTEGRITY HUD (Top-Left) */}
       <div className="absolute top-16 left-6 z-20 pointer-events-none space-y-2.5">
-        <motion.div
-          key={currentObjective}
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="p-3 bg-[#080C14]/90 border border-cyber-cyan/40 rounded shadow-[0_0_20px_rgba(0,240,255,0.15)] font-mono max-w-xs"
-        >
-          <div className="text-[10px] text-cyber-textMuted uppercase flex items-center gap-1.5 mb-1">
-            <Target className="w-3 h-3 text-cyber-cyan" />
-            <span>DIRECTIVE // OBJECTIVE</span>
-          </div>
-          <div className="text-xs font-bold text-cyber-cyan glow-cyan-sm flex items-center gap-2">
-            {isDoorUnlocked ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-cyber-cyan inline shrink-0" />
-            ) : (
-              <span className="w-2 h-2 rounded-full bg-cyber-yellow inline-block animate-pulse shrink-0" />
-            )}
-            <span>
-              <CorruptedText text={currentObjective} corruptionLevel={corruptionLevel} />
-            </span>
-          </div>
-        </motion.div>
-
-        {/* Dynamic System Integrity Gauge */}
+        <QuestHUD />
         <SystemIntegrityHUD />
       </div>
 

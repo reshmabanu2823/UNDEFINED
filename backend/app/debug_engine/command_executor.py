@@ -134,6 +134,16 @@ class AuthoritativeCommandExecutor:
             db.add(event)
             await db.commit()
 
+            # Advance Quest Objectives
+            try:
+                from app.services.quest_service import advance_quest_objective
+                if target_id_clean == "terminal_01":
+                    await advance_quest_objective(db, "DEBUG_SCAN_TERMINAL", session_id=session.id, user_id=session.user_id)
+                elif target_id_clean == "door_01":
+                    await advance_quest_objective(db, "DEBUG_SCAN_DOOR", session_id=session.id, user_id=session.user_id)
+            except Exception as e:
+                logger.warning(f"Error advancing quest objective on scan: {e}")
+
             return {
                 "success": True,
                 "command": raw_command,
@@ -204,6 +214,19 @@ class AuthoritativeCommandExecutor:
                     # Trigger Authoritative Server-Side Corruption Engine
                     from app.game_engine.corruption_engine import corruption_engine
                     await corruption_engine.trigger_door_root_corruption(db, session)
+
+                    # Advance Quest: Gain ROOT permission -> Enter Sector 02
+                    try:
+                        from app.services.quest_service import advance_quest_objective
+                        await advance_quest_objective(
+                            db,
+                            "DOOR_ROOT_GRANTED",
+                            session_id=session.id,
+                            user_id=session.user_id,
+                            metadata={"corruption_level": session.corruption_level},
+                        )
+                    except Exception:
+                        pass
                 else:
                     current_state["permission"] = "USER"
                     current_state["locked"] = True

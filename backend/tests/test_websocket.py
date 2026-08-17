@@ -60,7 +60,7 @@ async def test_websocket_broadcast_on_debug_rewrite():
                 assert rewrite_res.status_code == 200
 
                 # Verify WebSocket receives broadcasts
-                events = [ws.receive_json(), ws.receive_json()]
+                events = [ws.receive_json(), ws.receive_json(), ws.receive_json()]
                 event_types = [e["type"] for e in events]
                 assert "NULL_CORRUPTION" in event_types
                 assert "WORLD_STATE_CHANGED" in event_types

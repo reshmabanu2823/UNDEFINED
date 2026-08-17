@@ -15,6 +15,7 @@ from app.routers import (
     debug_router,
     ws_router,
     memories_router,
+    quests_router,
 )
 
 
@@ -104,6 +105,7 @@ app.include_router(game_router)
 app.include_router(debug_router)
 app.include_router(ws_router)
 app.include_router(memories_router)
+app.include_router(quests_router)
 
 
 @app.get("/", tags=["Root"])

@@ -4,5 +4,6 @@ from app.routers.game import router as game_router
 from app.routers.debug import router as debug_router
 from app.routers.ws import router as ws_router
 from app.routers.memories import router as memories_router
+from app.routers.quests import router as quests_router
 
-__all__ = ["health_router", "auth_router", "game_router", "debug_router", "ws_router", "memories_router"]
+__all__ = ["health_router", "auth_router", "game_router", "debug_router", "ws_router", "memories_router", "quests_router"]
