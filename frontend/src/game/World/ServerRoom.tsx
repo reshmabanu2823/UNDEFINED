@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
 import { ServerRack } from '../Objects/ServerRack';
 import { ComputerTerminal } from '../Objects/ComputerTerminal';
 import { GlowingCables } from '../Objects/GlowingCables';
@@ -6,49 +8,90 @@ import { SecurityDoor } from '../Objects/SecurityDoor';
 import { MemoryFileObject } from '../Objects/MemoryFileObject';
 import { Interactable } from '../Objects/Interactable';
 import { AtmosphereParticles } from './AtmosphereParticles';
+import { NullEntitySilhouette } from '../Objects/NullEntitySilhouette';
+import { useWorldStore } from '../../stores/worldStore';
 
 export const ServerRoom: React.FC = () => {
+  const isBlackout = useWorldStore((state) => state.isBlackout);
+  const corruptionLevel = useWorldStore((state) => state.corruptionLevel);
+
+  const light1Ref = useRef<THREE.PointLight | null>(null);
+  const light2Ref = useRef<THREE.PointLight | null>(null);
+  const light3Ref = useRef<THREE.PointLight | null>(null);
+  const light4Ref = useRef<THREE.PointLight | null>(null);
+
+  // Environmental lighting reacts to corruption and blackout
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+
+    if (isBlackout) {
+      if (light1Ref.current) light1Ref.current.intensity = 0.0;
+      if (light2Ref.current) light2Ref.current.intensity = 0.0;
+      if (light3Ref.current) light3Ref.current.intensity = 0.0;
+      if (light4Ref.current) light4Ref.current.intensity = 0.0;
+      return;
+    }
+
+    // Dynamic flickering when corruption rises
+    const flickerFactor = corruptionLevel > 50 ? (Math.sin(t * 15.0) > 0.8 ? 0.3 : 1.0) : 1.0;
+    const colorShift = corruptionLevel > 50 && Math.sin(t * 8.0) > 0.7;
+
+    if (light1Ref.current) {
+      light1Ref.current.intensity = (0.9 + Math.sin(t * 2.0) * 0.15) * flickerFactor;
+      light1Ref.current.color.set(colorShift ? '#FF2A4D' : '#00F0FF');
+    }
+    if (light2Ref.current) {
+      light2Ref.current.intensity = (0.8 + Math.cos(t * 2.5) * 0.15) * flickerFactor;
+      light2Ref.current.color.set(colorShift ? '#FF2A4D' : '#9d4edd');
+    }
+    if (light3Ref.current) {
+      light3Ref.current.intensity = (0.7 + Math.sin(t * 3.0) * 0.2) * flickerFactor;
+    }
+    if (light4Ref.current) {
+      light4Ref.current.intensity = (0.6 + Math.sin(t * 1.5) * 0.1) * flickerFactor;
+    }
+  });
+
   return (
     <group>
       {/* Fog & Environment Settings */}
       <fog attach="fog" args={['#030509', 3, 22]} />
-      <ambientLight intensity={0.25} color="#0d1b2a" />
+      <ambientLight intensity={isBlackout ? 0.02 : 0.25} color="#0d1b2a" />
 
-      {/* Main Overhead Lighting (Cyan & Subtle Purple) */}
-      <pointLight position={[0, 3.2, 5.0]} color="#00F0FF" intensity={0.9} distance={8} />
-      <pointLight position={[0, 3.2, 0.0]} color="#9d4edd" intensity={0.8} distance={7} />
-      <pointLight position={[0, 3.2, -6.0]} color="#00F0FF" intensity={0.7} distance={6} />
-      <pointLight position={[0, 3.2, -10.5]} color="#9d4edd" intensity={0.6} distance={5} />
+      {/* Main Overhead Lighting */}
+      <pointLight ref={light1Ref} position={[0, 3.2, 5.0]} color="#00F0FF" intensity={0.9} distance={8} />
+      <pointLight ref={light2Ref} position={[0, 3.2, 0.0]} color="#9d4edd" intensity={0.8} distance={7} />
+      <pointLight ref={light3Ref} position={[0, 3.2, -6.0]} color="#00F0FF" intensity={0.7} distance={6} />
+      <pointLight ref={light4Ref} position={[0, 3.2, -10.5]} color="#9d4edd" intensity={0.6} distance={5} />
 
       {/* FLOORS */}
-      {/* Main Room Floor (12m wide, 12m deep) */}
       <mesh position={[0, 0, 3.5]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[12, 12]} />
-        <meshStandardMaterial
-          color="#070B12"
-          metalness={0.85}
-          roughness={0.25}
-        />
+        <meshStandardMaterial color="#070B12" metalness={0.85} roughness={0.25} />
       </mesh>
 
-      {/* Corridor Floor (4m wide, 12m long) */}
+      {/* Corridor Floor */}
       <mesh position={[0, 0, -8.0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[4, 11]} />
-        <meshStandardMaterial
-          color="#060910"
-          metalness={0.9}
-          roughness={0.3}
-        />
+        <meshStandardMaterial color="#060910" metalness={0.9} roughness={0.3} />
       </mesh>
 
-      {/* Glowing Floor Guide Strips (Cyan) */}
+      {/* Glowing Floor Guide Strips */}
       <mesh position={[-1.7, 0.005, -2.5]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.06, 17]} />
-        <meshStandardMaterial color="#00F0FF" emissive="#00F0FF" emissiveIntensity={2.5} />
+        <meshStandardMaterial
+          color={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissive={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissiveIntensity={2.5}
+        />
       </mesh>
       <mesh position={[1.7, 0.005, -2.5]} rotation={[-Math.PI / 2, 0, 0]}>
         <planeGeometry args={[0.06, 17]} />
-        <meshStandardMaterial color="#00F0FF" emissive="#00F0FF" emissiveIntensity={2.5} />
+        <meshStandardMaterial
+          color={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissive={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissiveIntensity={2.5}
+        />
       </mesh>
 
       {/* CEILINGS */}
@@ -70,19 +113,16 @@ export const ServerRoom: React.FC = () => {
       ))}
 
       {/* WALLS */}
-      {/* Back Wall */}
       <mesh position={[0, 1.8, 9.5]} rotation={[0, Math.PI, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#090E17" metalness={0.8} roughness={0.5} />
       </mesh>
 
-      {/* Main Room Left Wall */}
       <mesh position={[-6.0, 1.8, 3.5]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#080C15" metalness={0.85} roughness={0.4} />
       </mesh>
 
-      {/* Main Room Right Wall */}
       <mesh position={[6.0, 1.8, 3.5]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#080C15" metalness={0.85} roughness={0.4} />
@@ -98,13 +138,12 @@ export const ServerRoom: React.FC = () => {
         <meshStandardMaterial color="#090E17" metalness={0.8} roughness={0.5} />
       </mesh>
 
-      {/* Corridor Left Wall */}
+      {/* Corridor Walls */}
       <mesh position={[-2.0, 1.8, -7.25]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[9.5, 3.6]} />
         <meshStandardMaterial color="#070B13" metalness={0.9} roughness={0.4} />
       </mesh>
 
-      {/* Corridor Right Wall */}
       <mesh position={[2.0, 1.8, -7.25]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[9.5, 3.6]} />
         <meshStandardMaterial color="#070B13" metalness={0.9} roughness={0.4} />
@@ -113,7 +152,11 @@ export const ServerRoom: React.FC = () => {
       {/* Wall Recessed Emissive Strips */}
       <mesh position={[-5.96, 2.2, 3.5]} rotation={[0, Math.PI / 2, 0]}>
         <planeGeometry args={[11, 0.04]} />
-        <meshStandardMaterial color="#00F0FF" emissive="#00F0FF" emissiveIntensity={2.5} />
+        <meshStandardMaterial
+          color={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissive={corruptionLevel > 50 ? '#FF2A4D' : '#00F0FF'}
+          emissiveIntensity={2.5}
+        />
       </mesh>
       <mesh position={[5.96, 2.2, 3.5]} rotation={[0, -Math.PI / 2, 0]}>
         <planeGeometry args={[11, 0.04]} />
@@ -174,6 +217,9 @@ export const ServerRoom: React.FC = () => {
 
       {/* Glowing Cables */}
       <GlowingCables />
+
+      {/* CORRUPTED NULL ENTITY SILHOUETTE (in corridor) */}
+      <NullEntitySilhouette position={[0, 0, -6.5]} />
 
       {/* 4. INTERACTABLE SECURITY DOOR (door_01) */}
       <Interactable

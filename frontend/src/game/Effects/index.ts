@@ -1,13 +1,5 @@
-export interface Effect {
-  id: string;
-  type: string;
-  duration: number;
-}
-
-export class EffectManager {
-  private activeEffects: Effect[] = [];
-
-  trigger(effect: Effect) {
-    this.activeEffects.push(effect);
-  }
-}
+export * from './CorruptedText';
+export * from './GlitchOverlay';
+export * from './ScanlineOverlay';
+export * from './ScreenDistortion';
+export * from './WarningOverlay';

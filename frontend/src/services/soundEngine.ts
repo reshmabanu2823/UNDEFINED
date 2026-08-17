@@ -168,6 +168,57 @@ class CyberAudioEngine {
     } catch {}
   }
 
+  public playNullAwakeningSound() {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      // Deep distorted sub drone
+      const oscDrone = this.ctx.createOscillator();
+      const gainDrone = this.ctx.createGain();
+
+      oscDrone.type = 'sawtooth';
+      oscDrone.frequency.setValueAtTime(60, this.ctx.currentTime);
+      oscDrone.frequency.linearRampToValueAtTime(45, this.ctx.currentTime + 1.8);
+
+      // Filter for dark corrupted resonance
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(400, this.ctx.currentTime);
+      filter.frequency.linearRampToValueAtTime(120, this.ctx.currentTime + 1.8);
+
+      gainDrone.gain.setValueAtTime(0.12, this.ctx.currentTime);
+      gainDrone.gain.linearRampToValueAtTime(0.18, this.ctx.currentTime + 0.6);
+      gainDrone.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 2.0);
+
+      oscDrone.connect(filter);
+      filter.connect(gainDrone);
+      gainDrone.connect(this.ctx.destination);
+
+      oscDrone.start();
+      oscDrone.stop(this.ctx.currentTime + 2.1);
+
+      // Noise glitch burst
+      const bufferSize = this.ctx.sampleRate * 0.4;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (i % 200 > 100 ? 1 : 0.2);
+      }
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.08, this.ctx.currentTime + 0.3);
+      noiseGain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
+
+      noise.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noise.start(this.ctx.currentTime + 0.3);
+    } catch {}
+  }
+
   public playBootTransition() {
     if (this.isMuted) return;
     try {

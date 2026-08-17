@@ -16,8 +16,17 @@ import {
   Radio,
   Sparkles,
   Target,
-  CheckCircle2
+  CheckCircle2,
+  Activity,
+  AlertTriangle
 } from 'lucide-react';
+
+// Reusable Corruption Effects
+import { GlitchOverlay } from '../../game/Effects/GlitchOverlay';
+import { ScanlineOverlay } from '../../game/Effects/ScanlineOverlay';
+import { ScreenDistortion } from '../../game/Effects/ScreenDistortion';
+import { CorruptedText } from '../../game/Effects/CorruptedText';
+import { WarningOverlay } from '../../game/Effects/WarningOverlay';
 
 export interface GameProps {
   onReturnToMenu?: () => void;
@@ -28,12 +37,17 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
   const { targeted, activeModal } = useInteractionState();
 
-  // Single Source of Truth: Zustand useWorldStore
+  // Centralized Zustand World State
   const playerPosition = useWorldStore((state) => state.playerPosition);
   const currentObjective = useWorldStore((state) => state.currentObjective);
   const isDoorUnlocked = !useWorldStore((state) => state.door_01.locked);
   const notifications = useWorldStore((state) => state.notifications);
   const dismissNotification = useWorldStore((state) => state.dismissNotification);
+
+  // Global Corruption State
+  const corruptionLevel = useWorldStore((state) => state.corruptionLevel);
+  const isBlackout = useWorldStore((state) => state.isBlackout);
+  const nullEventStage = useWorldStore((state) => state.nullEventStage);
 
   const isInCorridor = playerPosition.z < -2.0;
 
@@ -55,16 +69,17 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           <ServerRoom />
           <InteractionRaycaster />
           <FirstPersonPlayer
-            isLocked={isLocked && !activeModal}
+            isLocked={isLocked && !activeModal && !isBlackout}
             setIsLocked={setIsLocked}
           />
         </Canvas>
       </div>
 
-      {/* CRT Visual Layers */}
-      <div className="crt-overlay crt-scanlines opacity-35 pointer-events-none" />
-      <div className="crt-overlay crt-vignette opacity-70 pointer-events-none" />
-      <div className="crt-overlay crt-noise opacity-25 pointer-events-none" />
+      {/* REUSABLE VISUAL CORRUPTION EFFECTS */}
+      <ScanlineOverlay corruptionLevel={corruptionLevel} />
+      <GlitchOverlay corruptionLevel={corruptionLevel} />
+      <ScreenDistortion corruptionLevel={corruptionLevel} isBlackout={isBlackout} />
+      <WarningOverlay stage={nullEventStage} corruptionLevel={corruptionLevel} />
 
       {/* CENTER CROSSHAIR & INTERACTION PROMPT */}
       <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
@@ -84,7 +99,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
           {/* DYNAMIC HUD INTERACTION PROMPT (When looking at an interactable) */}
           <AnimatePresence>
-            {targeted && !activeModal && (
+            {targeted && !activeModal && !isBlackout && (
               <motion.div
                 initial={{ opacity: 0, y: 8, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -100,7 +115,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
                     [E] INTERACT
                   </span>
                   <span className="text-[10px] text-cyber-textDim font-mono">
-                    {targeted.displayName}
+                    <CorruptedText text={targeted.displayName} corruptionLevel={corruptionLevel} />
                   </span>
                 </div>
                 <Sparkles className="w-3.5 h-3.5 text-cyber-cyan animate-spin" />
@@ -127,16 +142,46 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           )}
 
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyber-cyan animate-ping" />
-            <span className="font-bold text-cyber-cyan glow-cyan-sm tracking-wider">
-              UNDEFINED // RUNTIME ACTIVE
+            <span
+              className={`w-2 h-2 rounded-full ${
+                corruptionLevel > 50 ? 'bg-cyber-red animate-ping' : 'bg-cyber-cyan animate-ping'
+              }`}
+            />
+            <span
+              className={`font-bold tracking-wider ${
+                corruptionLevel > 50
+                  ? 'text-cyber-red glow-red-sm'
+                  : 'text-cyber-cyan glow-cyan-sm'
+              }`}
+            >
+              <CorruptedText text="UNDEFINED // RUNTIME" corruptionLevel={corruptionLevel} />
             </span>
           </div>
         </div>
 
-        {/* Real-time Sector & Coordinates */}
-        <div className="flex items-center gap-5 text-cyber-textDim text-[11px]">
-          <span className="hidden sm:flex items-center gap-1">
+        {/* Real-time Telemetry & Corruption Gauge */}
+        <div className="flex items-center gap-6 text-[11px]">
+          {/* CORRUPTION METER */}
+          <div className="flex items-center gap-2 px-3 py-1 bg-cyber-surfaceAlt border border-cyber-border rounded">
+            <Activity
+              className={`w-3.5 h-3.5 ${
+                corruptionLevel > 50 ? 'text-cyber-red animate-pulse' : 'text-cyber-yellow'
+              }`}
+            />
+            <span className="text-cyber-textMuted">CORRUPTION:</span>
+            <span
+              className={`font-bold font-mono ${
+                corruptionLevel > 50 ? 'text-cyber-red glow-red-sm' : 'text-cyber-yellow'
+              }`}
+            >
+              {corruptionLevel}%
+            </span>
+            {corruptionLevel > 50 && (
+              <AlertTriangle className="w-3 h-3 text-cyber-red inline animate-bounce" />
+            )}
+          </div>
+
+          <span className="hidden sm:flex items-center gap-1 text-cyber-textDim">
             <Compass className="w-3.5 h-3.5 text-cyber-cyan" />
             <span>POS: [X: {playerPosition.x.toFixed(1)} | Z: {playerPosition.z.toFixed(1)}]</span>
           </span>
@@ -166,7 +211,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
             ) : (
               <span className="w-2 h-2 rounded-full bg-cyber-yellow inline-block animate-pulse shrink-0" />
             )}
-            <span>{currentObjective}</span>
+            <span>
+              <CorruptedText text={currentObjective} corruptionLevel={corruptionLevel} />
+            </span>
           </div>
         </motion.div>
       </div>
@@ -225,9 +272,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
         </div>
       </footer>
 
-      {/* CLICK TO ENGAGE POINTER LOCK PROMPT (When not locked and modal not open) */}
+      {/* CLICK TO ENGAGE POINTER LOCK PROMPT */}
       <AnimatePresence>
-        {!isLocked && !activeModal && (
+        {!isLocked && !activeModal && !isBlackout && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

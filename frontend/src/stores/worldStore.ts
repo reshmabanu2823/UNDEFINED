@@ -3,6 +3,7 @@ import { soundEngine } from '../services/soundEngine';
 
 export type PermissionLevel = 'USER' | 'ADMIN' | 'ROOT';
 export type DoorStatus = 'LOCKED' | 'UNLOCKED';
+export type NullEventStage = 'IDLE' | 'FREEZE' | 'BLACKOUT' | 'WARNING' | 'NULL_MESSAGE' | 'COMPLETED';
 
 export interface DoorState {
   id: 'door_01';
@@ -64,14 +65,22 @@ export interface WorldStoreState {
   currentObjective: string;
   notifications: WorldNotification[];
 
+  // Corruption & NULL Event State
+  corruptionLevel: number;
+  isBlackout: boolean;
+  nullEventStage: NullEventStage;
+  nullEntityVisible: boolean;
+
   // Actions
   setPlayerPosition: (pos: PlayerPosition) => void;
   setTerminalActive: (active: boolean) => void;
   setDoorPermission: (permission: PermissionLevel) => void;
   unlockDoor: () => void;
   setObjective: (objective: string) => void;
+  setCorruptionLevel: (level: number) => void;
   addNotification: (notif: Omit<WorldNotification, 'id' | 'timestamp'>) => void;
   dismissNotification: (id: string) => void;
+  triggerNullCorruptionEvent: () => void;
   rewriteProperty: (
     objectId: string,
     property: string,
@@ -124,6 +133,12 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   currentObjective: 'ACCESS SECURITY DOOR',
   notifications: [],
 
+  // Initial Corruption Level: 21%
+  corruptionLevel: 21,
+  isBlackout: false,
+  nullEventStage: 'IDLE',
+  nullEntityVisible: false,
+
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
 
   setTerminalActive: (active) =>
@@ -133,35 +148,28 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
 
   setDoorPermission: (permission) => {
     const isRoot = permission === 'ROOT' || permission === 'ADMIN';
-    set((state) => ({
-      door_01: {
-        ...state.door_01,
-        permission,
-        locked: !isRoot,
-        status: isRoot ? 'UNLOCKED' : 'LOCKED',
-      },
-      currentObjective: isRoot ? 'ENTER SECTOR 02' : state.currentObjective,
-    }));
-
     if (isRoot) {
-      soundEngine.playDoorUnlock();
+      get().triggerNullCorruptionEvent();
+    } else {
+      set((state) => ({
+        door_01: {
+          ...state.door_01,
+          permission,
+          locked: true,
+          status: 'LOCKED',
+        },
+        currentObjective: 'ACCESS SECURITY DOOR',
+      }));
     }
   },
 
   unlockDoor: () => {
-    set((state) => ({
-      door_01: {
-        ...state.door_01,
-        permission: 'ROOT',
-        locked: false,
-        status: 'UNLOCKED',
-      },
-      currentObjective: 'ENTER SECTOR 02',
-    }));
-    soundEngine.playDoorUnlock();
+    get().triggerNullCorruptionEvent();
   },
 
   setObjective: (objective) => set({ currentObjective: objective }),
+
+  setCorruptionLevel: (level) => set({ corruptionLevel: level }),
 
   addNotification: (notif) => {
     const newNotif: WorldNotification = {
@@ -179,6 +187,71 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       notifications: state.notifications.filter((n) => n.id !== id),
     })),
 
+  // THE FULL NULL CORRUPTION EVENT ORCHESTRATOR
+  triggerNullCorruptionEvent: () => {
+    // 1. Door unlock succeeds
+    set((state) => ({
+      door_01: {
+        ...state.door_01,
+        permission: 'ROOT',
+        locked: false,
+        status: 'UNLOCKED',
+      },
+      currentObjective: 'ENTER SECTOR 02',
+      nullEventStage: 'FREEZE',
+    }));
+
+    soundEngine.playDoorUnlock();
+
+    // 2. Freeze & flicker -> Blackout (0.5s - 1.0s)
+    setTimeout(() => {
+      set({ isBlackout: true, nullEventStage: 'BLACKOUT' });
+      soundEngine.playGlitch();
+
+      setTimeout(() => {
+        // 3. System Warning Screen & audio distortion
+        set({
+          isBlackout: false,
+          nullEventStage: 'WARNING',
+          nullEntityVisible: true,
+        });
+        soundEngine.playNullAwakeningSound();
+
+        // 4. Animate corruption rising 21% -> 74%
+        let currentLvl = 21;
+        const targetLvl = 74;
+        const interval = setInterval(() => {
+          currentLvl += 3;
+          if (currentLvl >= targetLvl) {
+            currentLvl = targetLvl;
+            clearInterval(interval);
+          }
+          set({ corruptionLevel: currentLvl });
+        }, 60);
+
+        // 5. Reveal "NULL: hello." message
+        setTimeout(() => {
+          set({ nullEventStage: 'NULL_MESSAGE' });
+          soundEngine.playWarning();
+
+          // 6. Complete event & transition to high-corruption ambient gameplay
+          setTimeout(() => {
+            set({
+              nullEventStage: 'COMPLETED',
+              nullEntityVisible: false,
+            });
+
+            get().addNotification({
+              title: 'CORRUPTION SURGE // SECTOR 00',
+              message: 'NULL process actively overwriting neural cortex. Proceed to Sector 02 immediately.',
+              type: 'ERROR',
+            });
+          }, 3500);
+        }, 2200);
+      }, 800);
+    }, 350);
+  },
+
   rewriteProperty: (objectId, property, value) => {
     const objIdLower = objectId.toLowerCase().trim();
     const propLower = property.toLowerCase().trim();
@@ -187,16 +260,11 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     if (objIdLower === 'door_01') {
       if (propLower === 'permission' || propLower === 'permissionlevel') {
         if (valLower === 'root' || valLower === 'admin') {
-          get().unlockDoor();
-          get().addNotification({
-            title: 'SECURITY GATE OVERRIDE',
-            message: 'Blast door permissions elevated to ROOT. Hydraulic locks disengaged.',
-            type: 'SUCCESS',
-          });
+          get().triggerNullCorruptionEvent();
 
           return {
             success: true,
-            message: `[DEBUG] COMMAND ACCEPTED\n[WORLD] permission = ROOT\n[WORLD] status = UNLOCKED\n[WORLD] Objective Updated: ENTER SECTOR 02`,
+            message: `[DEBUG] COMMAND ACCEPTED\n[WORLD] permission = ROOT\n[WORLD] status = UNLOCKED\n[!] CRITICAL: UNKNOWN PROCESS AWAKENED`,
           };
         } else if (valLower === 'user') {
           set((state) => ({
@@ -216,7 +284,7 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       } else if (propLower === 'locked') {
         const isLocked = valLower === 'true' || valLower === '1';
         if (!isLocked) {
-          get().unlockDoor();
+          get().triggerNullCorruptionEvent();
         } else {
           set((state) => ({
             door_01: {
@@ -280,5 +348,9 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       playerPosition: { x: 0, y: 1.65, z: 7.5 },
       currentObjective: 'ACCESS SECURITY DOOR',
       notifications: [],
+      corruptionLevel: 21,
+      isBlackout: false,
+      nullEventStage: 'IDLE',
+      nullEntityVisible: false,
     }),
 }));
