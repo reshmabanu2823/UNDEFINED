@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useInteractionState } from '../../stores/interactionStore';
 import { SecurityDoorModal } from './SecurityDoorModal';
-import { DebugTerminalModal } from './DebugTerminalModal';
+import { DebugTerminal } from '../DebugTerminal';
 import { MemoryViewerModal } from './MemoryViewerModal';
 import { ServerNodeModal } from './ServerNodeModal';
 import { soundEngine } from '../../services/soundEngine';
@@ -48,7 +48,7 @@ export const InteractionModalContainer: React.FC = () => {
               <SecurityDoorModal data={activeModal} onClose={closeModal} />
             )}
             {activeModal.type === 'TERMINAL' && (
-              <DebugTerminalModal data={activeModal} onClose={closeModal} />
+              <DebugTerminal onClose={closeModal} />
             )}
             {activeModal.type === 'MEMORY' && (
               <MemoryViewerModal

@@ -6,6 +6,7 @@ import { FirstPersonPlayer } from '../../game/Player/FirstPersonPlayer';
 import { InteractionRaycaster } from '../../game/Player/InteractionRaycaster';
 import { InteractionModalContainer } from '../../components/InteractionModals/InteractionModalContainer';
 import { useInteractionState } from '../../stores/interactionStore';
+import { worldState } from '../../game/systems/WorldState';
 import { soundEngine } from '../../services/soundEngine';
 import { 
   ArrowLeft, 
@@ -29,6 +30,13 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   });
 
   const { targeted, activeModal } = useInteractionState();
+  const [notifications, setNotifications] = useState(worldState.getNotifications());
+
+  useEffect(() => {
+    return worldState.subscribe(() => {
+      setNotifications([...worldState.getNotifications()]);
+    });
+  }, []);
 
   const handlePositionChange = useCallback((pos: { x: number; y: number; z: number }) => {
     setPlayerPosition(pos);
@@ -147,6 +155,37 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           </span>
         </div>
       </header>
+ 
+      {/* WORLD REAL-TIME NOTIFICATIONS */}
+      <div className="absolute top-16 right-6 z-30 space-y-2 pointer-events-none max-w-sm">
+        <AnimatePresence>
+          {notifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="p-3 bg-[#080C14]/95 border border-cyber-cyan/60 rounded shadow-[0_0_20px_rgba(0,240,255,0.25)] font-mono pointer-events-auto flex items-start justify-between gap-3"
+            >
+              <div>
+                <div className="text-xs font-bold text-cyber-cyan tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyber-cyan animate-ping" />
+                  {notif.title}
+                </div>
+                <div className="text-[11px] text-cyber-textDim mt-0.5 leading-relaxed">
+                  {notif.message}
+                </div>
+              </div>
+              <button
+                onClick={() => worldState.dismissNotification(notif.id)}
+                className="text-cyber-textMuted hover:text-white p-0.5"
+              >
+                &times;
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
 
       {/* BOTTOM CONTROLS / STATUS BAR */}
       <footer className="absolute bottom-0 left-0 right-0 z-20 px-6 py-2.5 border-t border-cyber-border bg-[#05070B]/85 backdrop-blur-sm text-[11px] text-cyber-textMuted flex items-center justify-between">

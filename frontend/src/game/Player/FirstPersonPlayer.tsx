@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { usePlayerControls } from './usePlayerControls';
+import { worldState } from '../systems/WorldState';
 
 interface FirstPersonPlayerProps {
   onPositionChange?: (pos: { x: number; y: number; z: number }) => void;
@@ -60,9 +61,7 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
     camera.position.y = 1.65;
 
     // Environment Collision Bounding Boxes
-    // Main Server Room: X in [-5.5, 5.5], Z in [-2.0, 9.0]
-    // Secondary Corridor: X in [-1.8, 1.8], Z in [-15.0, -2.0]
-    // Locked Security Door at Z = -11.5 (until unlocked)
+    const isDoorLocked = worldState.getDoorState().locked;
     const pos = camera.position;
 
     if (pos.z > -2.0) {
@@ -70,9 +69,11 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
       pos.x = Math.max(-5.3, Math.min(5.3, pos.x));
       pos.z = Math.max(-2.0, Math.min(8.6, pos.z));
     } else {
-      // Inside Corridor leading towards security door
+      // Inside Corridor leading towards / through security door
       pos.x = Math.max(-1.6, Math.min(1.6, pos.x));
-      pos.z = Math.max(-11.2, Math.min(-2.0, pos.z)); // Stop at security door
+      // If locked, stop at door (-11.2). If unlocked, allow walking through into exit area (-15.2)
+      const minZ = isDoorLocked ? -11.2 : -15.2;
+      pos.z = Math.max(minZ, Math.min(-2.0, pos.z));
     }
 
     if (onPositionChange) {
