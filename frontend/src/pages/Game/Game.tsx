@@ -30,12 +30,15 @@ import { WarningOverlay } from '../../game/Effects/WarningOverlay';
 import { SystemIntegrityHUD } from '../../components/HUD/SystemIntegrityHUD';
 import { SystemFailure } from '../../components/SystemFailure/SystemFailure';
 
+import { useGameWebSocket } from '../../hooks/useGameWebSocket';
+
 export interface GameProps {
   onReturnToMenu?: () => void;
 }
 
 export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const { connectionStatus, isConnected } = useGameWebSocket();
 
   const { targeted, activeModal } = useInteractionState();
 
@@ -163,6 +166,34 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
         {/* Real-time Telemetry & Corruption Gauge */}
         <div className="flex items-center gap-6 text-[11px]">
+          {/* CONNECTION STATUS BADGE */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-cyber-surfaceAlt border border-cyber-border rounded font-mono text-[10px]">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                isConnected
+                  ? 'bg-cyber-cyan shadow-[0_0_6px_#00F0FF]'
+                  : connectionStatus === 'RECONNECTING'
+                  ? 'bg-cyber-yellow animate-ping'
+                  : 'bg-cyber-textDim'
+              }`}
+            />
+            <span
+              className={
+                isConnected
+                  ? 'text-cyber-cyan font-bold'
+                  : connectionStatus === 'RECONNECTING'
+                  ? 'text-cyber-yellow'
+                  : 'text-cyber-textDim'
+              }
+            >
+              {isConnected
+                ? 'WS: LIVE'
+                : connectionStatus === 'RECONNECTING'
+                ? 'WS: RECONNECTING'
+                : 'WS: OFFLINE'}
+            </span>
+          </div>
+
           {/* CORRUPTION METER */}
           <div className="flex items-center gap-2 px-3 py-1 bg-cyber-surfaceAlt border border-cyber-border rounded">
             <Activity

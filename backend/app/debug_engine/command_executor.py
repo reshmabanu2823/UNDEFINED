@@ -240,6 +240,31 @@ class AuthoritativeCommandExecutor:
             db.add(event)
             await db.commit()
 
+            # Real-time WebSocket Broadcasts to connected session clients
+            try:
+                from app.websocket.connection_manager import ws_manager
+                await ws_manager.broadcast_to_session(
+                    session.id,
+                    event_type="WORLD_STATE_CHANGED",
+                    payload={
+                        "object_id": target_obj.object_id,
+                        "property": prop_name,
+                        "state": current_state,
+                    },
+                )
+                if obj_clean == "door_01" and val_clean in ["ROOT", "ADMIN"]:
+                    await ws_manager.broadcast_to_session(
+                        session.id,
+                        event_type="NULL_CORRUPTION",
+                        payload={
+                            "level": 74,
+                            "trigger": "door_01_root_override",
+                            "message": "UNKNOWN PROCESS DETECTED // NULL: hello.",
+                        },
+                    )
+            except Exception:
+                pass
+
             return {
                 "success": True,
                 "command": raw_command,
