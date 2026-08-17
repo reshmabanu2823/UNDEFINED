@@ -23,16 +23,12 @@ class GameSaveResponse(BaseModel):
     id: str
     user_id: str
     save_name: str
-    slot_index: int
-    sector: str
-    corruption_level: int
-    player_integrity: int
-    current_objective: str
-    world_state_data: Dict[str, Any]
+    slot_number: int = Field(1, alias="slot_index")
+    serialized_game_state: Dict[str, Any]
     created_at: datetime
     updated_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class WorldStateSync(BaseModel):
