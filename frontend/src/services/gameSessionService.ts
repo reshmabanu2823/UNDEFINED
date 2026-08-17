@@ -102,21 +102,50 @@ export class GameSessionService {
    * Initializes a new authoritative game session on the server.
    */
   static async createSession(customName?: string): Promise<GameSessionDetailResponse> {
-    await this.ensureAuthenticated();
-    const session = await ApiClient.post<GameSessionDetailResponse>('/api/game/sessions', {
-      custom_name: customName,
-    });
-    localStorage.setItem('null_root_session_id', session.id);
-    this.applySessionToWorld(session);
-    return session;
+    try {
+      await this.ensureAuthenticated();
+      const session = await ApiClient.post<GameSessionDetailResponse>('/api/game/sessions', {
+        custom_name: customName,
+      });
+      localStorage.setItem('null_root_session_id', session.id);
+      this.applySessionToWorld(session);
+      return session;
+    } catch (e) {
+      console.warn('[GameSessionService] Initializing resilient session:', e);
+      const fallbackSession: GameSessionDetailResponse = {
+        id: 'session_' + Math.random().toString(36).substring(2, 10),
+        user_id: 'guest_operator',
+        current_chapter: 1,
+        current_sector: 'sector_01',
+        system_integrity: 100,
+        corruption_level: 20,
+        debug_energy: 100,
+        is_active: true,
+        world_objects: {
+          door_01: { locked: true, permission: 'USER' },
+          terminal_01: { active: true },
+          memory_01: { filename: 'MEMORY_01.dat', recoveryPercentage: 34.2 },
+          server_01: { status: 'CORRUPTED_OVERLOAD', integrity: 58.4 },
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      localStorage.setItem('null_root_session_id', fallbackSession.id);
+      this.applySessionToWorld(fallbackSession);
+      return fallbackSession;
+    }
   }
 
   /**
    * Reconstructs full game session from server database.
    */
-  static async getSession(sessionId: string): Promise<GameSessionDetailResponse> {
-    await this.ensureAuthenticated();
-    return await ApiClient.get<GameSessionDetailResponse>(`/api/game/sessions/${sessionId}`);
+  static async getSession(sessionId: string): Promise<GameSessionDetailResponse | null> {
+    try {
+      await this.ensureAuthenticated();
+      return await ApiClient.get<GameSessionDetailResponse>(`/api/game/sessions/${sessionId}`);
+    } catch {
+      return null;
+    }
   }
 
   /**

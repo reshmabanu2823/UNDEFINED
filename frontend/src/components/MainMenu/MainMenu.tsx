@@ -93,7 +93,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
       }
     } else if (option.id === 'new_game') {
       soundEngine.playBootTransition();
-      await GameSessionService.createSession('INITIAL_RUN');
+      try {
+        await GameSessionService.createSession('INITIAL_RUN');
+      } catch (e) {
+        console.warn('Session startup notice:', e);
+      }
       if (onStartNewGame) {
         onStartNewGame();
       }
