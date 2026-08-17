@@ -1,4 +1,4 @@
-import { worldState, WorldGameObject } from './WorldState';
+import { useWorldStore } from '../../stores/worldStore';
 import { soundEngine } from '../../services/soundEngine';
 
 export interface CommandParseResult {
@@ -21,6 +21,7 @@ export class DebugCommandParser {
     }
 
     const lower = trimmed.toLowerCase();
+    const state = useWorldStore.getState();
 
     // 1. HELP COMMAND
     if (lower === 'help') {
@@ -40,15 +41,17 @@ Available Commands:
 
     // 2. STATUS COMMAND
     if (lower === 'status') {
-      const door = worldState.getDoorState();
+      const door = state.door_01;
+      const srv = state.server_01;
+      const mem = state.memory_01;
       return {
         success: true,
         output: `SECTOR 00 TELEMETRY:
-  SESSION:    ROOT_DEBUGGER_ACTIVE
-  DOOR 01:    [${door.status}] (PERMISSION: ${door.permission})
-  SERVER 01:  [OVERLOAD 58.4%]
-  MEMORY 01:  [RECOVERED 34.2%]
-  ANOMALY:    NULL PROCESS (PID 0x00000000)`,
+  CURRENT OBJECTIVE:  ${state.currentObjective}
+  DOOR 01:            [${door.status}] (PERMISSION: ${door.permission})
+  SERVER 01:          [${srv.status} ${srv.integrity}%]
+  MEMORY 01:          [RECOVERED ${mem.recoveryPercentage}%]
+  ANOMALY:            NULL PROCESS FOUND (PID 0x00000000)`,
         isSuccess: true,
       };
     }
@@ -67,41 +70,91 @@ Available Commands:
       const parts = trimmed.split(/\s+/);
       if (parts.length === 1) {
         // List all objects
-        const all = worldState.getAllObjects();
-        const listText = all
-          .map((obj) => `  * ${obj.id.padEnd(12)} - ${obj.displayName} [${obj.type}]`)
-          .join('\n');
-
         return {
           success: true,
-          output: `DETECTED ENTITIES IN SECTOR 00:\n${listText}\n\nUse "scan <id>" (e.g. "scan door_01") for detailed analysis.`,
+          output: `DETECTED ENTITIES IN SECTOR 00:
+  * door_01      - ${state.door_01.displayName} [${state.door_01.type}]
+  * terminal_01  - ${state.terminal_01.displayName} [${state.terminal_01.type}]
+  * memory_01    - ${state.memory_01.displayName} [${state.memory_01.type}]
+  * server_01    - ${state.server_01.displayName} [${state.server_01.type}]
+
+Use "scan <object_id>" (e.g. "scan door_01") for detailed analysis.`,
           isSuccess: true,
         };
       }
 
       const targetId = parts[1].toLowerCase();
-      const obj = worldState.getObject(targetId);
 
-      if (!obj) {
-        soundEngine.playWarning();
+      if (targetId === 'door_01') {
+        const door = state.door_01;
+        soundEngine.playSystemLine();
         return {
-          success: false,
-          output: `ERROR: Object "${parts[1]}" not found in sector memory matrix.\nUse "scan" to list detectable entities.`,
-          isError: true,
+          success: true,
+          output: `OBJECT FOUND
+
+ID: ${door.id}
+TYPE: ${door.type}
+PERMISSION: ${door.permission}
+STATUS: ${door.status}`,
+          isSuccess: true,
         };
       }
 
-      soundEngine.playSystemLine();
+      if (targetId === 'terminal_01') {
+        const term = state.terminal_01;
+        soundEngine.playSystemLine();
+        return {
+          success: true,
+          output: `OBJECT FOUND
+
+ID: ${term.id}
+TYPE: ${term.type}
+NAME: ${term.displayName}
+ACCESS: ${term.accessLevel}`,
+          isSuccess: true,
+        };
+      }
+
+      if (targetId === 'memory_01') {
+        const mem = state.memory_01;
+        soundEngine.playSystemLine();
+        return {
+          success: true,
+          output: `OBJECT FOUND
+
+ID: ${mem.id}
+TYPE: ${mem.type}
+FILENAME: ${mem.filename}
+RECOVERY: ${mem.recoveryPercentage}%`,
+          isSuccess: true,
+        };
+      }
+
+      if (targetId === 'server_01') {
+        const srv = state.server_01;
+        soundEngine.playSystemLine();
+        return {
+          success: true,
+          output: `OBJECT FOUND
+
+ID: ${srv.id}
+TYPE: ${srv.type}
+STATUS: ${srv.status}
+INTEGRITY: ${srv.integrity}%`,
+          isSuccess: true,
+        };
+      }
+
+      soundEngine.playWarning();
       return {
-        success: true,
-        output: this.formatScanOutput(obj),
-        isSuccess: true,
+        success: false,
+        output: `ERROR: Object "${parts[1]}" not found in sector memory matrix.\nUse "scan" to list detectable entities.`,
+        isError: true,
       };
     }
 
     // 5. REWRITE COMMAND (e.g. rewrite door_01.permission=root)
     if (lower.startsWith('rewrite')) {
-      // Regex pattern to match: rewrite <object_id>.<property>=<value>
       const rewritePattern = /^rewrite\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s*=\s*(.+)$/i;
       const match = trimmed.match(rewritePattern);
 
@@ -115,10 +168,10 @@ Available Commands:
       }
 
       const [, objId, propName, rawValue] = match;
-      const result = worldState.updateProperty(objId, propName, rawValue);
+      const result = state.rewriteProperty(objId, propName, rawValue);
 
       if (result.success) {
-        soundEngine.playBootTransition();
+        soundEngine.playDoorUnlock();
         return {
           success: true,
           output: result.message,
@@ -143,44 +196,6 @@ Available Commands:
       isError: true,
     };
   }
-
-  private static formatScanOutput(obj: WorldGameObject): string {
-    if (obj.id === 'door_01') {
-      return `OBJECT FOUND
-
-ID: ${obj.id}
-TYPE: ${obj.type}
-PERMISSION: ${obj.permission}
-STATUS: ${obj.status}`;
-    }
-
-    if (obj.id === 'terminal_01') {
-      return `OBJECT FOUND
-
-ID: ${obj.id}
-TYPE: ${obj.type}
-NAME: ${obj.displayName}
-ACCESS: ${obj.accessLevel}`;
-    }
-
-    if (obj.id === 'memory_01') {
-      return `OBJECT FOUND
-
-ID: ${obj.id}
-TYPE: ${obj.type}
-FILENAME: ${obj.filename}
-RECOVERY: ${obj.recoveryPercentage}%`;
-    }
-
-    if (obj.id === 'server_01') {
-      return `OBJECT FOUND
-
-ID: ${obj.id}
-TYPE: ${obj.type}
-STATUS: ${obj.status}
-INTEGRITY: ${obj.integrity}%`;
-    }
-
-    return `OBJECT FOUND\nID: ${(obj as any).id}\nTYPE: ${(obj as any).type}`;
-  }
 }
+
+export default DebugCommandParser;

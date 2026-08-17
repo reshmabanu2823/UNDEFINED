@@ -3,16 +3,14 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { usePlayerControls } from './usePlayerControls';
-import { worldState } from '../systems/WorldState';
+import { useWorldStore } from '../../stores/worldStore';
 
 interface FirstPersonPlayerProps {
-  onPositionChange?: (pos: { x: number; y: number; z: number }) => void;
   isLocked: boolean;
   setIsLocked: (locked: boolean) => void;
 }
 
 export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
-  onPositionChange,
   isLocked,
   setIsLocked,
 }) => {
@@ -61,7 +59,7 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
     camera.position.y = 1.65;
 
     // Environment Collision Bounding Boxes
-    const isDoorLocked = worldState.getDoorState().locked;
+    const isDoorLocked = useWorldStore.getState().door_01.locked;
     const pos = camera.position;
 
     if (pos.z > -2.0) {
@@ -69,20 +67,19 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
       pos.x = Math.max(-5.3, Math.min(5.3, pos.x));
       pos.z = Math.max(-2.0, Math.min(8.6, pos.z));
     } else {
-      // Inside Corridor leading towards / through security door
+      // Inside Corridor
       pos.x = Math.max(-1.6, Math.min(1.6, pos.x));
       // If locked, stop at door (-11.2). If unlocked, allow walking through into exit area (-15.2)
       const minZ = isDoorLocked ? -11.2 : -15.2;
       pos.z = Math.max(minZ, Math.min(-2.0, pos.z));
     }
 
-    if (onPositionChange) {
-      onPositionChange({
-        x: Number(camera.position.x.toFixed(2)),
-        y: Number(camera.position.y.toFixed(2)),
-        z: Number(camera.position.z.toFixed(2)),
-      });
-    }
+    // Sync position to world store
+    useWorldStore.getState().setPlayerPosition({
+      x: Number(camera.position.x.toFixed(2)),
+      y: Number(camera.position.y.toFixed(2)),
+      z: Number(camera.position.z.toFixed(2)),
+    });
   });
 
   return (

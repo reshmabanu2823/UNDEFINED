@@ -1,38 +1,30 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { worldState, WorldDoorObject } from '../systems/WorldState';
+import { useWorldStore } from '../../stores/worldStore';
 
 interface SecurityDoorProps {
   position: [number, number, number];
 }
 
 export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
-  const [doorData, setDoorData] = useState<WorldDoorObject>(worldState.getDoorState());
+  const door = useWorldStore((state) => state.door_01);
+  const isUnlocked = !door.locked;
 
   const leftDoorRef = useRef<THREE.Mesh | null>(null);
   const rightDoorRef = useRef<THREE.Mesh | null>(null);
   const beaconRef = useRef<THREE.PointLight | null>(null);
 
-  // Subscribe to world state changes
-  useEffect(() => {
-    return worldState.subscribe(() => {
-      setDoorData({ ...worldState.getDoorState() });
-    });
-  }, []);
-
-  const isUnlocked = !doorData.locked;
-
   // Smoothly slide doors open when unlocked
   useFrame(({ clock }, delta) => {
-    const targetLeftX = isUnlocked ? -1.45 : -0.55;
-    const targetRightX = isUnlocked ? 1.45 : 0.55;
+    const targetLeftX = isUnlocked ? -1.5 : -0.55;
+    const targetRightX = isUnlocked ? 1.5 : 0.55;
 
     if (leftDoorRef.current) {
       leftDoorRef.current.position.x = THREE.MathUtils.damp(
         leftDoorRef.current.position.x,
         targetLeftX,
-        4.0,
+        3.5,
         delta
       );
     }
@@ -41,7 +33,7 @@ export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
       rightDoorRef.current.position.x = THREE.MathUtils.damp(
         rightDoorRef.current.position.x,
         targetRightX,
-        4.0,
+        3.5,
         delta
       );
     }
@@ -49,7 +41,7 @@ export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
     if (beaconRef.current) {
       const t = clock.getElapsedTime();
       beaconRef.current.intensity = isUnlocked
-        ? 1.5 + Math.sin(t * 3.0) * 0.4
+        ? 1.6 + Math.sin(t * 3.0) * 0.4
         : 1.0 + Math.sin(t * 5.0) * 0.8;
     }
   });
@@ -73,8 +65,8 @@ export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
         <boxGeometry args={[1.05, 3.1, 0.15]} />
         <meshStandardMaterial
           color={isUnlocked ? '#0F2537' : '#101726'}
-          roughness={0.4}
-          metalness={0.85}
+          roughness={0.35}
+          metalness={0.9}
         />
       </mesh>
 
@@ -83,18 +75,18 @@ export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
         <boxGeometry args={[1.05, 3.1, 0.15]} />
         <meshStandardMaterial
           color={isUnlocked ? '#0F2537' : '#101726'}
-          roughness={0.4}
-          metalness={0.85}
+          roughness={0.35}
+          metalness={0.9}
         />
       </mesh>
 
-      {/* Central Seam / Status Light */}
+      {/* Central Hydraulic Seam / Glow Indicator */}
       <mesh position={[0, 1.6, 0.12]}>
         <boxGeometry args={[0.08, 3.0, 0.08]} />
         <meshStandardMaterial
           color={isUnlocked ? '#00F0FF' : '#FF2A4D'}
           emissive={isUnlocked ? '#00F0FF' : '#FF2A4D'}
-          emissiveIntensity={isUnlocked ? 3.0 : 2.0}
+          emissiveIntensity={isUnlocked ? 3.2 : 2.0}
         />
       </mesh>
 
@@ -109,12 +101,12 @@ export const SecurityDoor: React.FC<SecurityDoorProps> = ({ position }) => {
           <meshStandardMaterial
             color={isUnlocked ? '#00F0FF' : '#FF2A4D'}
             emissive={isUnlocked ? '#00F0FF' : '#FF2A4D'}
-            emissiveIntensity={3.0}
+            emissiveIntensity={3.2}
           />
         </mesh>
       </group>
 
-      {/* Overhead Warning / Clearance Beacon */}
+      {/* Overhead Beacon Light */}
       <mesh position={[0, 3.4, 0.25]}>
         <cylinderGeometry args={[0.1, 0.1, 0.12, 16]} />
         <meshStandardMaterial

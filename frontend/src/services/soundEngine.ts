@@ -134,6 +134,40 @@ class CyberAudioEngine {
     } catch {}
   }
 
+  public playDoorUnlock() {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+
+      // Heavy hydraulic mechanical sound + futuristic energy sweep
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc1.frequency.setValueAtTime(140, this.ctx.currentTime);
+      osc1.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.4);
+
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(440, this.ctx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.3);
+
+      gain.gain.setValueAtTime(0.09, this.ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.12, this.ctx.currentTime + 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.6);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      osc1.start();
+      osc2.start();
+      osc1.stop(this.ctx.currentTime + 0.65);
+      osc2.stop(this.ctx.currentTime + 0.65);
+    } catch {}
+  }
+
   public playBootTransition() {
     if (this.isMuted) return;
     try {

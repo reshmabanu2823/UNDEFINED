@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerRoom } from '../../game/World/ServerRoom';
@@ -6,7 +6,7 @@ import { FirstPersonPlayer } from '../../game/Player/FirstPersonPlayer';
 import { InteractionRaycaster } from '../../game/Player/InteractionRaycaster';
 import { InteractionModalContainer } from '../../components/InteractionModals/InteractionModalContainer';
 import { useInteractionState } from '../../stores/interactionStore';
-import { worldState } from '../../game/systems/WorldState';
+import { useWorldStore } from '../../stores/worldStore';
 import { soundEngine } from '../../services/soundEngine';
 import { 
   ArrowLeft, 
@@ -14,7 +14,9 @@ import {
   Compass, 
   MousePointer, 
   Radio,
-  Sparkles
+  Sparkles,
+  Target,
+  CheckCircle2
 } from 'lucide-react';
 
 export interface GameProps {
@@ -23,24 +25,15 @@ export interface GameProps {
 
 export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [playerPosition, setPlayerPosition] = useState<{ x: number; y: number; z: number }>({
-    x: 0,
-    y: 1.65,
-    z: 7.5,
-  });
 
   const { targeted, activeModal } = useInteractionState();
-  const [notifications, setNotifications] = useState(worldState.getNotifications());
 
-  useEffect(() => {
-    return worldState.subscribe(() => {
-      setNotifications([...worldState.getNotifications()]);
-    });
-  }, []);
-
-  const handlePositionChange = useCallback((pos: { x: number; y: number; z: number }) => {
-    setPlayerPosition(pos);
-  }, []);
+  // Single Source of Truth: Zustand useWorldStore
+  const playerPosition = useWorldStore((state) => state.playerPosition);
+  const currentObjective = useWorldStore((state) => state.currentObjective);
+  const isDoorUnlocked = !useWorldStore((state) => state.door_01.locked);
+  const notifications = useWorldStore((state) => state.notifications);
+  const dismissNotification = useWorldStore((state) => state.dismissNotification);
 
   const isInCorridor = playerPosition.z < -2.0;
 
@@ -64,7 +57,6 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           <FirstPersonPlayer
             isLocked={isLocked && !activeModal}
             setIsLocked={setIsLocked}
-            onPositionChange={handlePositionChange}
           />
         </Canvas>
       </div>
@@ -155,8 +147,31 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           </span>
         </div>
       </header>
- 
-      {/* WORLD REAL-TIME NOTIFICATIONS */}
+
+      {/* TACTICAL OBJECTIVE TRACKER (Top-Left under Header) */}
+      <div className="absolute top-16 left-6 z-20 pointer-events-none">
+        <motion.div
+          key={currentObjective}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          className="p-3 bg-[#080C14]/90 border border-cyber-cyan/40 rounded shadow-[0_0_20px_rgba(0,240,255,0.15)] font-mono max-w-xs"
+        >
+          <div className="text-[10px] text-cyber-textMuted uppercase flex items-center gap-1.5 mb-1">
+            <Target className="w-3 h-3 text-cyber-cyan" />
+            <span>DIRECTIVE // OBJECTIVE</span>
+          </div>
+          <div className="text-xs font-bold text-cyber-cyan glow-cyan-sm flex items-center gap-2">
+            {isDoorUnlocked ? (
+              <CheckCircle2 className="w-3.5 h-3.5 text-cyber-cyan inline shrink-0" />
+            ) : (
+              <span className="w-2 h-2 rounded-full bg-cyber-yellow inline-block animate-pulse shrink-0" />
+            )}
+            <span>{currentObjective}</span>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* WORLD REAL-TIME NOTIFICATIONS (Top-Right) */}
       <div className="absolute top-16 right-6 z-30 space-y-2 pointer-events-none max-w-sm">
         <AnimatePresence>
           {notifications.map((notif) => (
@@ -177,8 +192,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
                 </div>
               </div>
               <button
-                onClick={() => worldState.dismissNotification(notif.id)}
+                onClick={() => dismissNotification(notif.id)}
                 className="text-cyber-textMuted hover:text-white p-0.5"
+                aria-label="Dismiss notification"
               >
                 &times;
               </button>
@@ -205,7 +221,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
         <div className="flex items-center gap-2 text-cyber-textDim">
           <Radio className="w-3 h-3 text-cyber-cyan animate-pulse" />
-          <span>NEURAL LINK: SYNCHRONIZED</span>
+          <span>DOOR: {isDoorUnlocked ? 'UNLOCKED (ROOT)' : 'LOCKED (USER)'}</span>
         </div>
       </footer>
 
