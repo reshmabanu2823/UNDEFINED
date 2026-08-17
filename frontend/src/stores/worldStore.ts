@@ -4,6 +4,7 @@ import { soundEngine } from '../services/soundEngine';
 export type PermissionLevel = 'USER' | 'ADMIN' | 'ROOT';
 export type DoorStatus = 'LOCKED' | 'UNLOCKED';
 export type NullEventStage = 'IDLE' | 'FREEZE' | 'BLACKOUT' | 'WARNING' | 'NULL_MESSAGE' | 'COMPLETED';
+export type EnemyAIState = 'IDLE' | 'DETECT' | 'CHASE' | 'ATTACK' | 'LOST';
 
 export interface DoorState {
   id: 'door_01';
@@ -62,6 +63,8 @@ export interface WorldStoreState {
 
   // Player & Game State
   playerPosition: PlayerPosition;
+  playerIntegrity: number; // 0 - 100
+  isSystemFailure: boolean;
   currentObjective: string;
   notifications: WorldNotification[];
 
@@ -71,8 +74,15 @@ export interface WorldStoreState {
   nullEventStage: NullEventStage;
   nullEntityVisible: boolean;
 
+  // Enemy Threat State
+  enemyState: EnemyAIState;
+  enemyDistance: number;
+
   // Actions
   setPlayerPosition: (pos: PlayerPosition) => void;
+  damagePlayer: (amount: number) => void;
+  healPlayer: (amount: number) => void;
+  setEnemyState: (state: EnemyAIState, distance?: number) => void;
   setTerminalActive: (active: boolean) => void;
   setDoorPermission: (permission: PermissionLevel) => void;
   unlockDoor: () => void;
@@ -87,6 +97,7 @@ export interface WorldStoreState {
     value: string
   ) => { success: boolean; message: string };
   resetWorldState: () => void;
+  rebootSystem: () => void;
 }
 
 const INITIAL_DOOR_STATE: DoorState = {
@@ -130,6 +141,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   server_01: { ...INITIAL_SERVER_STATE },
 
   playerPosition: { x: 0, y: 1.65, z: 7.5 },
+  playerIntegrity: 100,
+  isSystemFailure: false,
   currentObjective: 'ACCESS SECURITY DOOR',
   notifications: [],
 
@@ -139,7 +152,35 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   nullEventStage: 'IDLE',
   nullEntityVisible: false,
 
+  enemyState: 'IDLE',
+  enemyDistance: 999,
+
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
+
+  damagePlayer: (amount) => {
+    const current = get().playerIntegrity;
+    if (current <= 0 || get().isSystemFailure) return;
+
+    const next = Math.max(0, current - amount);
+    soundEngine.playWarning();
+
+    if (next <= 0) {
+      set({ playerIntegrity: 0, isSystemFailure: true });
+      soundEngine.playNullAwakeningSound();
+    } else {
+      set({ playerIntegrity: next });
+    }
+  },
+
+  healPlayer: (amount) => {
+    set((state) => ({
+      playerIntegrity: Math.min(100, state.playerIntegrity + amount),
+    }));
+  },
+
+  setEnemyState: (state, distance = 999) => {
+    set({ enemyState: state, enemyDistance: distance });
+  },
 
   setTerminalActive: (active) =>
     set((state) => ({
@@ -346,11 +387,20 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       memory_01: { ...INITIAL_MEMORY_STATE },
       server_01: { ...INITIAL_SERVER_STATE },
       playerPosition: { x: 0, y: 1.65, z: 7.5 },
+      playerIntegrity: 100,
+      isSystemFailure: false,
       currentObjective: 'ACCESS SECURITY DOOR',
       notifications: [],
       corruptionLevel: 21,
       isBlackout: false,
       nullEventStage: 'IDLE',
       nullEntityVisible: false,
+      enemyState: 'IDLE',
+      enemyDistance: 999,
     }),
+
+  rebootSystem: () => {
+    soundEngine.playBootTransition();
+    get().resetWorldState();
+  },
 }));

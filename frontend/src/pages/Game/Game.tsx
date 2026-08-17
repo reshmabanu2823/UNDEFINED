@@ -27,6 +27,8 @@ import { ScanlineOverlay } from '../../game/Effects/ScanlineOverlay';
 import { ScreenDistortion } from '../../game/Effects/ScreenDistortion';
 import { CorruptedText } from '../../game/Effects/CorruptedText';
 import { WarningOverlay } from '../../game/Effects/WarningOverlay';
+import { SystemIntegrityHUD } from '../../components/HUD/SystemIntegrityHUD';
+import { SystemFailure } from '../../components/SystemFailure/SystemFailure';
 
 export interface GameProps {
   onReturnToMenu?: () => void;
@@ -193,8 +195,8 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
         </div>
       </header>
 
-      {/* TACTICAL OBJECTIVE TRACKER (Top-Left under Header) */}
-      <div className="absolute top-16 left-6 z-20 pointer-events-none">
+      {/* TACTICAL OBJECTIVE TRACKER & SYSTEM INTEGRITY HUD (Top-Left) */}
+      <div className="absolute top-16 left-6 z-20 pointer-events-none space-y-2.5">
         <motion.div
           key={currentObjective}
           initial={{ opacity: 0, x: -20 }}
@@ -216,6 +218,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
             </span>
           </div>
         </motion.div>
+
+        {/* Dynamic System Integrity Gauge */}
+        <SystemIntegrityHUD />
       </div>
 
       {/* WORLD REAL-TIME NOTIFICATIONS (Top-Right) */}
@@ -302,6 +307,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
       {/* INTERACTIVE MODAL DIALOGS */}
       <InteractionModalContainer />
+
+      {/* SYSTEM FAILURE GAME OVER SCREEN */}
+      <SystemFailure />
     </motion.div>
   );
 };

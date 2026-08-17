@@ -8,7 +8,7 @@ import { SecurityDoor } from '../Objects/SecurityDoor';
 import { MemoryFileObject } from '../Objects/MemoryFileObject';
 import { Interactable } from '../Objects/Interactable';
 import { AtmosphereParticles } from './AtmosphereParticles';
-import { NullEntitySilhouette } from '../Objects/NullEntitySilhouette';
+import { NullFragment } from '../Enemies/NullFragment';
 import { useWorldStore } from '../../stores/worldStore';
 
 export const ServerRoom: React.FC = () => {
@@ -218,8 +218,8 @@ export const ServerRoom: React.FC = () => {
       {/* Glowing Cables */}
       <GlowingCables />
 
-      {/* CORRUPTED NULL ENTITY SILHOUETTE (in corridor) */}
-      <NullEntitySilhouette position={[0, 0, -6.5]} />
+      {/* 1. NULL_FRAGMENT ENEMY PROTOTYPE (Corrupted Humanoid Entity) */}
+      <NullFragment initialPosition={[0, 1.2, -6.5]} />
 
       {/* 4. INTERACTABLE SECURITY DOOR (door_01) */}
       <Interactable
