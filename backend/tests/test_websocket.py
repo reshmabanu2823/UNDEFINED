@@ -59,14 +59,16 @@ async def test_websocket_broadcast_on_debug_rewrite():
                 )
                 assert rewrite_res.status_code == 200
 
-                # Verify WebSocket receives WORLD_STATE_CHANGED broadcast
-                ws_event_1 = ws.receive_json()
-                assert ws_event_1["type"] == "WORLD_STATE_CHANGED"
-                assert ws_event_1["payload"]["object_id"] == "door_01"
-                assert ws_event_1["payload"]["state"]["permission"] == "ROOT"
-                assert ws_event_1["payload"]["state"]["locked"] is False
+                # Verify WebSocket receives broadcasts
+                events = [ws.receive_json(), ws.receive_json()]
+                event_types = [e["type"] for e in events]
+                assert "NULL_CORRUPTION" in event_types
+                assert "WORLD_STATE_CHANGED" in event_types
 
-                # Verify WebSocket receives NULL_CORRUPTION broadcast
-                ws_event_2 = ws.receive_json()
-                assert ws_event_2["type"] == "NULL_CORRUPTION"
-                assert ws_event_2["payload"]["level"] == 74
+                world_event = next(e for e in events if e["type"] == "WORLD_STATE_CHANGED")
+                assert world_event["payload"]["object_id"] == "door_01"
+                assert world_event["payload"]["state"]["permission"] == "ROOT"
+                assert world_event["payload"]["state"]["locked"] is False
+
+                corrupt_event = next(e for e in events if e["type"] == "NULL_CORRUPTION")
+                assert corrupt_event["payload"]["new_level"] == 74

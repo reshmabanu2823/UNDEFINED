@@ -199,15 +199,16 @@ class AuthoritativeCommandExecutor:
                 if val_clean in ["ROOT", "ADMIN"]:
                     current_state["permission"] = "ROOT"
                     current_state["locked"] = False
-                    # Elevate corruption level on root elevation
-                    session.corruption_level = 74
                     new_val = "ROOT"
+                    target_obj.state_json = current_state
+                    # Trigger Authoritative Server-Side Corruption Engine
+                    from app.game_engine.corruption_engine import corruption_engine
+                    await corruption_engine.trigger_door_root_corruption(db, session)
                 else:
                     current_state["permission"] = "USER"
                     current_state["locked"] = True
                     new_val = "USER"
-
-                target_obj.state_json = current_state
+                    target_obj.state_json = current_state
 
             # Apply Domain Rules for terminal_01 / memory_01
             elif obj_clean == "terminal_01":
@@ -224,7 +225,7 @@ class AuthoritativeCommandExecutor:
                 new_val = bool_val
                 target_obj.state_json = current_state
 
-            # Log Authoritative GameEvent
+            # Log Authoritative GameEvent for debug rewrite
             event = GameEvent(
                 session_id=session.id,
                 event_type="DEBUG_REWRITE",
@@ -240,7 +241,7 @@ class AuthoritativeCommandExecutor:
             db.add(event)
             await db.commit()
 
-            # Real-time WebSocket Broadcasts to connected session clients
+            # Real-time WebSocket Broadcast for world state changes
             try:
                 from app.websocket.connection_manager import ws_manager
                 await ws_manager.broadcast_to_session(
@@ -252,16 +253,6 @@ class AuthoritativeCommandExecutor:
                         "state": current_state,
                     },
                 )
-                if obj_clean == "door_01" and val_clean in ["ROOT", "ADMIN"]:
-                    await ws_manager.broadcast_to_session(
-                        session.id,
-                        event_type="NULL_CORRUPTION",
-                        payload={
-                            "level": 74,
-                            "trigger": "door_01_root_override",
-                            "message": "UNKNOWN PROCESS DETECTED // NULL: hello.",
-                        },
-                    )
             except Exception:
                 pass
 
