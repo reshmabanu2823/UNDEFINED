@@ -60,10 +60,11 @@ async def test_websocket_broadcast_on_debug_rewrite():
                 assert rewrite_res.status_code == 200
 
                 # Verify WebSocket receives broadcasts
-                events = [ws.receive_json(), ws.receive_json(), ws.receive_json()]
+                events = [ws.receive_json(), ws.receive_json(), ws.receive_json(), ws.receive_json()]
                 event_types = [e["type"] for e in events]
                 assert "NULL_CORRUPTION" in event_types
                 assert "WORLD_STATE_CHANGED" in event_types
+                assert "ENEMY_SPAWNED" in event_types
 
                 world_event = next(e for e in events if e["type"] == "WORLD_STATE_CHANGED")
                 assert world_event["payload"]["object_id"] == "door_01"
@@ -72,3 +73,6 @@ async def test_websocket_broadcast_on_debug_rewrite():
 
                 corrupt_event = next(e for e in events if e["type"] == "NULL_CORRUPTION")
                 assert corrupt_event["payload"]["new_level"] == 74
+
+                enemy_event = next(e for e in events if e["type"] == "ENEMY_SPAWNED")
+                assert enemy_event["payload"]["enemy_id"] == "null_fragment_01"

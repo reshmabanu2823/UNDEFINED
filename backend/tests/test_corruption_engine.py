@@ -137,17 +137,22 @@ async def test_corruption_engine_websocket_broadcast_on_rewrite():
                     json={"session_id": session_id, "command": "rewrite door_01.permission=root"},
                 )
 
-                # Receive broadcast events (NULL_CORRUPTION, QUEST_UPDATED, WORLD_STATE_CHANGED)
-                events = [ws.receive_json(), ws.receive_json(), ws.receive_json()]
+                # Receive broadcast events (NULL_CORRUPTION, ENEMY_SPAWNED, QUEST_UPDATED, WORLD_STATE_CHANGED)
+                events = [ws.receive_json(), ws.receive_json(), ws.receive_json(), ws.receive_json()]
                 event_types = [e["type"] for e in events]
                 assert "NULL_CORRUPTION" in event_types
                 assert "WORLD_STATE_CHANGED" in event_types
+                assert "ENEMY_SPAWNED" in event_types
 
                 corrupt_event = next(e for e in events if e["type"] == "NULL_CORRUPTION")
                 assert corrupt_event["payload"]["previous_level"] == 20
                 assert corrupt_event["payload"]["new_level"] == 74
                 assert corrupt_event["payload"]["severity"] == "HIGH"
                 assert corrupt_event["payload"]["message"] == "Unknown process detected"
+
+                enemy_event = next(e for e in events if e["type"] == "ENEMY_SPAWNED")
+                assert enemy_event["payload"]["enemy_id"] == "null_fragment_01"
+                assert enemy_event["payload"]["enemy_type"] == "NULL_FRAGMENT"
 
                 world_event = next(e for e in events if e["type"] == "WORLD_STATE_CHANGED")
                 assert world_event["payload"]["object_id"] == "door_01"

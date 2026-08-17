@@ -132,6 +132,21 @@ class CorruptionEngine:
         except Exception as e:
             logger.warning(f"WebSocket broadcast error for NULL_CORRUPTION: {e}")
 
+        # 5. Authoritatively spawn NULL_FRAGMENT enemy
+        try:
+            from app.game_engine.enemy_engine import enemy_engine
+            await enemy_engine.spawn_enemy(
+                db,
+                session_id=session.id,
+                enemy_id="null_fragment_01",
+                enemy_type="NULL_FRAGMENT",
+                sector=session.current_sector,
+                position=[0.0, 0.8, -4.0],
+                state="AGGRESSIVE",
+            )
+        except Exception as e:
+            logger.warning(f"Error triggering enemy spawn on corruption: {e}")
+
         return payload
 
 
