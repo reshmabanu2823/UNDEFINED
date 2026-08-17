@@ -1,9 +1,9 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.user import User
-from app.routers.auth import get_current_user
+from app.routers.auth import get_current_user, get_optional_current_user
 from app.schemas.game import (
     GameSessionCreate,
     GameSessionSummary,
@@ -138,6 +138,60 @@ async def load_session_endpoint(
             detail="SAVE_NOT_FOUND: Specified checkpoint could not be found for restoration.",
         )
     return format_session_detail(restored_session)
+
+
+@router.post("/sessions/{session_id}/system-failure")
+async def trigger_system_failure_endpoint(
+    session_id: str,
+    current_user: Optional[User] = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Authoritatively registers a SYSTEM_FAILURE event, logs telemetry, and broadcasts to connected clients.
+    Preserves all persistent checkpoint saves.
+    """
+    user_id = current_user.id if current_user else None
+    session_obj = await get_game_session_by_id(db, session_id, user_id)
+    if not session_obj:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"SESSION_NOT_FOUND: Session '{session_id}' not found.",
+        )
+
+    # Record SYSTEM_FAILURE event
+    from app.models.game_event import GameEvent
+    event = GameEvent(
+        session_id=session_id,
+        event_type="SYSTEM_FAILURE",
+        payload_json={
+            "status": "TERMINATED",
+            "message": "Player systemIntegrity reached 0. Player process terminated.",
+            "sector": session_obj.current_sector,
+            "chapter": session_obj.current_chapter,
+        },
+    )
+    db.add(event)
+    await db.commit()
+
+    # Broadcast via WebSocket
+    try:
+        from app.websocket.connection_manager import ws_manager
+        await ws_manager.broadcast_to_session(
+            session_id,
+            event_type="SYSTEM_FAILURE",
+            payload={
+                "message": "CRITICAL: Player process terminated.",
+                "null_status": "PROCESS STILL RUNNING",
+            },
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "SYSTEM_FAILURE_RECORDED",
+        "session_id": session_id,
+        "message": "System failure recorded. Persistent saves preserved.",
+    }
 
 
 @router.delete("/sessions/{session_id}")

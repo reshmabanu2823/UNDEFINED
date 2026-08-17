@@ -336,7 +336,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
       />
 
       {/* SYSTEM FAILURE GAME OVER SCREEN */}
-      <SystemFailure />
+      <SystemFailure onReturnToMenu={onReturnToMenu} />
     </motion.div>
   );
 };
