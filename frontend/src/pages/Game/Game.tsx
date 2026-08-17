@@ -3,15 +3,17 @@ import { Canvas } from '@react-three/fiber';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ServerRoom } from '../../game/World/ServerRoom';
 import { FirstPersonPlayer } from '../../game/Player/FirstPersonPlayer';
+import { InteractionRaycaster } from '../../game/Player/InteractionRaycaster';
+import { InteractionModalContainer } from '../../components/InteractionModals/InteractionModalContainer';
+import { useInteractionState } from '../../stores/interactionStore';
 import { soundEngine } from '../../services/soundEngine';
 import { 
   ArrowLeft, 
-  Terminal, 
   Cpu, 
   Compass, 
   MousePointer, 
-  Lock,
-  Radio
+  Radio,
+  Sparkles
 } from 'lucide-react';
 
 export interface GameProps {
@@ -26,14 +28,13 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
     z: 7.5,
   });
 
+  const { targeted, activeModal } = useInteractionState();
+
   const handlePositionChange = useCallback((pos: { x: number; y: number; z: number }) => {
     setPlayerPosition(pos);
   }, []);
 
-  // Determine contextual zone and proximity notifications
   const isInCorridor = playerPosition.z < -2.0;
-  const isNearSecurityDoor = playerPosition.z < -8.5;
-  const isNearTerminal = Math.abs(playerPosition.z - 0.5) < 1.8 && Math.abs(playerPosition.x) < 3.5;
 
   return (
     <motion.div
@@ -51,8 +52,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           gl={{ antialias: true, powerPreference: 'high-performance' }}
         >
           <ServerRoom />
+          <InteractionRaycaster />
           <FirstPersonPlayer
-            isLocked={isLocked}
+            isLocked={isLocked && !activeModal}
             setIsLocked={setIsLocked}
             onPositionChange={handlePositionChange}
           />
@@ -60,19 +62,51 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
       </div>
 
       {/* CRT Visual Layers */}
-      <div className="crt-overlay crt-scanlines opacity-40 pointer-events-none" />
+      <div className="crt-overlay crt-scanlines opacity-35 pointer-events-none" />
       <div className="crt-overlay crt-vignette opacity-70 pointer-events-none" />
-      <div className="crt-overlay crt-noise opacity-30 pointer-events-none" />
+      <div className="crt-overlay crt-noise opacity-25 pointer-events-none" />
 
-      {/* CENTER CROSSHAIR */}
+      {/* CENTER CROSSHAIR & INTERACTION PROMPT */}
       <div className="absolute inset-0 pointer-events-none z-20 flex items-center justify-center">
-        <div className="relative w-7 h-7 flex items-center justify-center">
-          {/* Cyan Tactical Crosshair */}
-          <div className="w-1.5 h-1.5 rounded-full bg-cyber-cyan/90 shadow-[0_0_6px_#00F0FF]" />
-          <div className="absolute top-0 w-0.5 h-1.5 bg-cyber-cyan/60" />
-          <div className="absolute bottom-0 w-0.5 h-1.5 bg-cyber-cyan/60" />
-          <div className="absolute left-0 h-0.5 w-1.5 bg-cyber-cyan/60" />
-          <div className="absolute right-0 h-0.5 w-1.5 bg-cyber-cyan/60" />
+        <div className="relative flex flex-col items-center justify-center">
+          {/* Tactical Center Crosshair with target-lock state */}
+          <div
+            className={`w-2 h-2 rounded-full transition-all duration-150 ${
+              targeted
+                ? 'scale-150 bg-cyber-cyan shadow-[0_0_12px_#00F0FF]'
+                : 'bg-cyber-cyan/80 shadow-[0_0_6px_#00F0FF]'
+            }`}
+          />
+          <div className="absolute top-[-10px] w-0.5 h-2 bg-cyber-cyan/60" />
+          <div className="absolute bottom-[-10px] w-0.5 h-2 bg-cyber-cyan/60" />
+          <div className="absolute left-[-10px] h-0.5 w-2 bg-cyber-cyan/60" />
+          <div className="absolute right-[-10px] h-0.5 w-2 bg-cyber-cyan/60" />
+
+          {/* DYNAMIC HUD INTERACTION PROMPT (When looking at an interactable) */}
+          <AnimatePresence>
+            {targeted && !activeModal && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                transition={{ duration: 0.18 }}
+                className="absolute top-8 px-4 py-2 bg-[#080C14]/95 border border-cyber-cyan/70 rounded shadow-[0_0_25px_rgba(0,240,255,0.3)] flex items-center gap-2.5 whitespace-nowrap pointer-events-none"
+              >
+                <div className="px-1.5 py-0.5 bg-cyber-cyan/20 border border-cyber-cyan rounded text-xs font-bold text-cyber-cyan animate-pulse">
+                  E
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold tracking-wider text-cyber-cyan">
+                    [E] INTERACT
+                  </span>
+                  <span className="text-[10px] text-cyber-textDim font-mono">
+                    {targeted.displayName}
+                  </span>
+                </div>
+                <Sparkles className="w-3.5 h-3.5 text-cyber-cyan animate-spin" />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -100,7 +134,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           </div>
         </div>
 
-        {/* Real-time Sector & Diagnostics */}
+        {/* Real-time Sector & Coordinates */}
         <div className="flex items-center gap-5 text-cyber-textDim text-[11px]">
           <span className="hidden sm:flex items-center gap-1">
             <Compass className="w-3.5 h-3.5 text-cyber-cyan" />
@@ -114,35 +148,6 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
         </div>
       </header>
 
-      {/* PROXIMITY INTERACTIVE ALERTS (Bottom-Center) */}
-      <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-        <AnimatePresence>
-          {isNearSecurityDoor && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="px-4 py-2 bg-[#080C14]/90 border border-cyber-red/70 rounded shadow-[0_0_20px_rgba(255,42,77,0.3)] flex items-center gap-2.5 text-xs text-cyber-red font-bold"
-            >
-              <Lock className="w-4 h-4 text-cyber-red animate-pulse" />
-              <span>SECURITY BLAST DOOR LOCKED // ACCESS CLEARANCE REQUIRED</span>
-            </motion.div>
-          )}
-
-          {isNearTerminal && !isNearSecurityDoor && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="px-4 py-2 bg-[#080C14]/90 border border-cyber-cyan/70 rounded shadow-[0_0_20px_rgba(0,240,255,0.25)] flex items-center gap-2.5 text-xs text-cyber-cyan font-bold"
-            >
-              <Terminal className="w-4 h-4 text-cyber-cyan" />
-              <span>TERMINAL NODE ACCESSIBLE // DATA STREAM SYNCHRONIZED</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
       {/* BOTTOM CONTROLS / STATUS BAR */}
       <footer className="absolute bottom-0 left-0 right-0 z-20 px-6 py-2.5 border-t border-cyber-border bg-[#05070B]/85 backdrop-blur-sm text-[11px] text-cyber-textMuted flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -152,19 +157,22 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           <span className="text-cyber-cyan">MOUSE</span>
           <span>LOOK</span>
           <span>&bull;</span>
+          <span className="text-cyber-cyan">E</span>
+          <span>INTERACT</span>
+          <span>&bull;</span>
           <span className="text-cyber-cyan">SHIFT</span>
           <span>SPRINT</span>
         </div>
 
         <div className="flex items-center gap-2 text-cyber-textDim">
           <Radio className="w-3 h-3 text-cyber-cyan animate-pulse" />
-          <span>NEURAL SYNC: 100%</span>
+          <span>NEURAL LINK: SYNCHRONIZED</span>
         </div>
       </footer>
 
-      {/* CLICK TO ENGAGE POINTER LOCK PROMPT */}
+      {/* CLICK TO ENGAGE POINTER LOCK PROMPT (When not locked and modal not open) */}
       <AnimatePresence>
-        {!isLocked && (
+        {!isLocked && !activeModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -180,7 +188,7 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
                 ENGAGE OPERATOR LINK
               </h3>
               <p className="text-xs text-cyber-textDim mb-4">
-                Click anywhere on screen to capture mouse controls and explore the server room.
+                Click anywhere to control camera & walk through the server room. Aim at objects and press <span className="text-cyber-cyan font-bold">[E]</span> to interact.
               </p>
               <div className="inline-block px-3 py-1 bg-cyber-surfaceAlt border border-cyber-border rounded text-[11px] text-cyber-textMuted">
                 PRESS <span className="text-cyber-cyan">ESC</span> AT ANY TIME TO RELEASE MOUSE
@@ -189,6 +197,9 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* INTERACTIVE MODAL DIALOGS */}
+      <InteractionModalContainer />
     </motion.div>
   );
 };

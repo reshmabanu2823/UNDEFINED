@@ -3,6 +3,8 @@ import { ServerRack } from '../Objects/ServerRack';
 import { ComputerTerminal } from '../Objects/ComputerTerminal';
 import { GlowingCables } from '../Objects/GlowingCables';
 import { SecurityDoor } from '../Objects/SecurityDoor';
+import { MemoryFileObject } from '../Objects/MemoryFileObject';
+import { Interactable } from '../Objects/Interactable';
 import { AtmosphereParticles } from './AtmosphereParticles';
 
 export const ServerRoom: React.FC = () => {
@@ -50,12 +52,10 @@ export const ServerRoom: React.FC = () => {
       </mesh>
 
       {/* CEILINGS */}
-      {/* Main Room Ceiling */}
       <mesh position={[0, 3.6, 3.5]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[12, 12]} />
         <meshStandardMaterial color="#05070B" metalness={0.7} roughness={0.6} />
       </mesh>
-      {/* Corridor Ceiling */}
       <mesh position={[0, 3.6, -8.0]} rotation={[Math.PI / 2, 0, 0]}>
         <planeGeometry args={[4, 11]} />
         <meshStandardMaterial color="#05070B" metalness={0.7} roughness={0.6} />
@@ -70,43 +70,41 @@ export const ServerRoom: React.FC = () => {
       ))}
 
       {/* WALLS */}
-      {/* Back Wall (South behind starting area at Z = 9.5) */}
+      {/* Back Wall */}
       <mesh position={[0, 1.8, 9.5]} rotation={[0, Math.PI, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#090E17" metalness={0.8} roughness={0.5} />
       </mesh>
 
-      {/* Main Room Left Wall (West at X = -6.0) */}
+      {/* Main Room Left Wall */}
       <mesh position={[-6.0, 1.8, 3.5]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#080C15" metalness={0.85} roughness={0.4} />
       </mesh>
 
-      {/* Main Room Right Wall (East at X = 6.0) */}
+      {/* Main Room Right Wall */}
       <mesh position={[6.0, 1.8, 3.5]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[12, 3.6]} />
         <meshStandardMaterial color="#080C15" metalness={0.85} roughness={0.4} />
       </mesh>
 
-      {/* North Divider Walls (Main room to Corridor at Z = -2.5) */}
-      {/* Left divider wall */}
+      {/* North Divider Walls */}
       <mesh position={[-4.0, 1.8, -2.5]} receiveShadow>
         <planeGeometry args={[4, 3.6]} />
         <meshStandardMaterial color="#090E17" metalness={0.8} roughness={0.5} />
       </mesh>
-      {/* Right divider wall */}
       <mesh position={[4.0, 1.8, -2.5]} receiveShadow>
         <planeGeometry args={[4, 3.6]} />
         <meshStandardMaterial color="#090E17" metalness={0.8} roughness={0.5} />
       </mesh>
 
-      {/* Corridor Left Wall (X = -2.0, Z from -2.5 to -12.0) */}
+      {/* Corridor Left Wall */}
       <mesh position={[-2.0, 1.8, -7.25]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[9.5, 3.6]} />
         <meshStandardMaterial color="#070B13" metalness={0.9} roughness={0.4} />
       </mesh>
 
-      {/* Corridor Right Wall (X = 2.0, Z from -2.5 to -12.0) */}
+      {/* Corridor Right Wall */}
       <mesh position={[2.0, 1.8, -7.25]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
         <planeGeometry args={[9.5, 3.6]} />
         <meshStandardMaterial color="#070B13" metalness={0.9} roughness={0.4} />
@@ -122,36 +120,73 @@ export const ServerRoom: React.FC = () => {
         <meshStandardMaterial color="#9d4edd" emissive="#9d4edd" emissiveIntensity={2.5} />
       </mesh>
 
-      {/* 2. SERVER RACKS */}
-      {/* Left Server Bank Row (3 racks) */}
-      <ServerRack position={[-4.5, 0, 5.5]} rotation={[0, Math.PI / 2, 0]} />
-      <ServerRack position={[-4.5, 0, 3.5]} rotation={[0, Math.PI / 2, 0]} />
-      <ServerRack position={[-4.5, 0, 1.5]} rotation={[0, Math.PI / 2, 0]} />
+      {/* 1. INTERACTABLE SERVER NODE (server_01) */}
+      <Interactable
+        id="server_01"
+        type="SERVER"
+        position={[-4.5, 0, 3.5]}
+        rotation={[0, Math.PI / 2, 0]}
+        hitboxSize={[1.4, 3.0, 1.4]}
+        hitboxOffset={[0, 1.5, 0]}
+      >
+        <ServerRack position={[0, 0, 0]} />
+      </Interactable>
 
-      {/* Right Server Bank Row (3 racks) */}
+      {/* Other Server Racks */}
+      <ServerRack position={[-4.5, 0, 5.5]} rotation={[0, Math.PI / 2, 0]} />
+      <ServerRack position={[-4.5, 0, 1.5]} rotation={[0, Math.PI / 2, 0]} />
       <ServerRack position={[4.5, 0, 5.5]} rotation={[0, -Math.PI / 2, 0]} />
       <ServerRack position={[4.5, 0, 3.5]} rotation={[0, -Math.PI / 2, 0]} />
       <ServerRack position={[4.5, 0, 1.5]} rotation={[0, -Math.PI / 2, 0]} />
-
-      {/* Corridor Server Units */}
       <ServerRack position={[-1.4, 0, -5.0]} rotation={[0, Math.PI / 2, 0]} />
       <ServerRack position={[1.4, 0, -8.0]} rotation={[0, -Math.PI / 2, 0]} />
 
-      {/* 3. COMPUTER TERMINALS WITH ANIMATED SCREENS */}
-      {/* Main Terminal Left */}
-      <ComputerTerminal position={[-2.2, 0, 0.5]} rotation={[0, 0.3, 0]} terminalId="TERMINAL_ALPHA" />
-      {/* Main Terminal Right */}
-      <ComputerTerminal position={[2.2, 0, 0.5]} rotation={[0, -0.3, 0]} terminalId="TERMINAL_BETA" />
+      {/* 2. INTERACTABLE TERMINAL (terminal_01) */}
+      <Interactable
+        id="terminal_01"
+        type="TERMINAL"
+        position={[-2.2, 0, 0.5]}
+        rotation={[0, 0.3, 0]}
+        hitboxSize={[1.6, 2.0, 1.4]}
+        hitboxOffset={[0, 1.0, 0]}
+      >
+        <ComputerTerminal position={[0, 0, 0]} terminalId="DEBUG_CORE" />
+      </Interactable>
+
+      {/* Right Terminal Console (with Memory File on Desk) */}
+      <group position={[2.2, 0, 0.5]} rotation={[0, -0.3, 0]}>
+        <ComputerTerminal position={[0, 0, 0]} terminalId="ARCHIVE_01" />
+        
+        {/* 3. INTERACTABLE MEMORY FILE (memory_01) */}
+        <Interactable
+          id="memory_01"
+          type="MEMORY"
+          position={[0.3, 0.95, 0.1]}
+          hitboxSize={[0.7, 0.7, 0.7]}
+          hitboxOffset={[0, 0.2, 0]}
+        >
+          <MemoryFileObject position={[0, 0, 0]} />
+        </Interactable>
+      </group>
+
       {/* Corridor Diagnostic Console */}
       <ComputerTerminal position={[1.3, 0, -4.5]} rotation={[0, -Math.PI / 2, 0]} terminalId="CORRIDOR_NODE" />
 
-      {/* 4. GLOWING CABLES (Floor & Ceiling Conduits) */}
+      {/* Glowing Cables */}
       <GlowingCables />
 
-      {/* 5. LOCKED SECURITY DOOR & EXIT AREA */}
-      <SecurityDoor position={[0, 0, -11.8]} />
+      {/* 4. INTERACTABLE SECURITY DOOR (door_01) */}
+      <Interactable
+        id="door_01"
+        type="DOOR"
+        position={[0, 0, -11.8]}
+        hitboxSize={[3.2, 3.6, 1.5]}
+        hitboxOffset={[0, 1.8, 0]}
+      >
+        <SecurityDoor position={[0, 0, 0]} />
+      </Interactable>
 
-      {/* 6. FLOATING ATMOSPHERIC PARTICLES */}
+      {/* Floating Atmosphere Particles */}
       <AtmosphereParticles />
     </group>
   );
