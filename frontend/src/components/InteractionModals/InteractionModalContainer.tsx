@@ -45,7 +45,7 @@ export const InteractionModalContainer: React.FC = () => {
             className="w-full flex items-center justify-center"
           >
             {activeModal.type === 'DOOR' && (
-              <SecurityDoorModal data={activeModal} onClose={closeModal} />
+              <SecurityDoorModal onClose={closeModal} />
             )}
             {activeModal.type === 'TERMINAL' && (
               <DebugTerminal onClose={closeModal} />

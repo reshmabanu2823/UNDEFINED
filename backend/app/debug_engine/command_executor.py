@@ -45,11 +45,11 @@ class AuthoritativeCommandExecutor:
                 "message": "Empty command string received.",
             }
 
-        # 1. Verify session exists and belongs to user
+        # 1. Verify session exists and verify ownership if authenticated
         session_stmt = (
             select(GameSession)
             .options(selectinload(GameSession.world_objects))
-            .where(GameSession.id == session_id, GameSession.user_id == user_id)
+            .where(GameSession.id == session_id)
         )
         session_res = await db.execute(session_stmt)
         session = session_res.scalars().first()
@@ -59,7 +59,16 @@ class AuthoritativeCommandExecutor:
                 "success": False,
                 "command": raw_command,
                 "error_code": "SESSION_NOT_FOUND",
-                "message": f"Game session '{session_id}' not found or access unauthorized.",
+                "message": f"Game session '{session_id}' not found in matrix database.",
+            }
+
+        # Check ownership if user is authenticated
+        if user_id and session.user_id != user_id and session.user_id != "anonymous_operator":
+            return {
+                "success": False,
+                "command": raw_command,
+                "error_code": "SESSION_UNAUTHORIZED",
+                "message": f"Access denied: Game session '{session_id}' belongs to another operator.",
             }
 
         # Build lookup map of world objects in this session

@@ -1,6 +1,6 @@
 import React from 'react';
 import { useWorldStore } from '../../stores/worldStore';
-import { Shield, ShieldAlert, AlertTriangle, Zap } from 'lucide-react';
+import { Shield, ShieldAlert, AlertTriangle } from 'lucide-react';
 
 export const SystemIntegrityHUD: React.FC = () => {
   const integrity = useWorldStore((state) => state.playerIntegrity);

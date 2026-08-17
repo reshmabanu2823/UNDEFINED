@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DebugCommandParser, CommandParseResult } from '../../game/systems/DebugCommandParser';
+import { DebugService, DebugExecuteResponse } from '../../services/debugService';
+import { useWorldStore } from '../../stores/worldStore';
 import { soundEngine } from '../../services/soundEngine';
-import { Terminal as TerminalIcon, X, CornerDownLeft, Sparkles, CheckCircle2 } from 'lucide-react';
+import { Terminal as TerminalIcon, X, CornerDownLeft, Sparkles, CheckCircle2, Loader2 } from 'lucide-react';
 
 interface DebugTerminalProps {
   isOpen?: boolean;
@@ -19,12 +20,13 @@ interface HistoryItem {
 
 export const DebugTerminal: React.FC<DebugTerminalProps> = ({ onClose }) => {
   const [inputVal, setInputVal] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [history, setHistory] = useState<HistoryItem[]>([
     {
       id: 'init-1',
       output: `=== NULL//ROOT KERNEL DEBUGGER [v4.19] ===
-SESSION: ACTIVE // AUTH: OPERATOR_OVERRIDE_SHELL
-Type "help" for command reference or "scan door_01" to inspect target.`,
+SESSION: AUTHORITATIVE_BACKEND_SYNC // FASTAPI GATEWAY
+Type "help" for reference or "scan door_01" to inspect target.`,
     },
   ]);
 
@@ -46,51 +48,102 @@ Type "help" for command reference or "scan door_01" to inspect target.`,
     if (terminalScrollRef.current) {
       terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
     }
-  }, [history]);
+  }, [history, isProcessing]);
 
-  // Handle command execution
-  const handleExecute = (cmdToRun?: string) => {
+  // Authoritative Backend Command Execution
+  const handleExecute = async (cmdToRun?: string) => {
+    if (isProcessing) return;
+
     const command = (cmdToRun !== undefined ? cmdToRun : inputVal).trim();
     if (!command) return;
 
+    soundEngine.playKeyTick();
+
+    // Local UI clear
     if (command.toLowerCase() === 'clear') {
-      soundEngine.playKeyTick();
       setHistory([]);
       setInputVal('');
       setHistoryPointer(-1);
       return;
     }
 
-    soundEngine.playKeyTick();
-    const result: CommandParseResult = DebugCommandParser.execute(command);
-
-    // Save to command history navigation buffer
-    setHistoryBuffer((prev) => [...prev, command]);
-    setHistoryPointer(-1);
-
-    if (result.shouldCloseTerminal) {
+    // Local UI exit
+    if (command.toLowerCase() === 'exit') {
       setTimeout(() => {
         onClose();
-      }, 400);
+      }, 200);
       return;
     }
 
-    if (result.stateChanged && command.toLowerCase().includes('door_01')) {
-      setSuccessBanner('DOOR_01 UNLOCKED // PERMISSION: ROOT');
-    }
-
-    setHistory((prev) => [
-      ...prev,
-      {
-        id: `log-${Date.now()}-${Math.random()}`,
-        command: command,
-        output: result.output,
-        isError: result.isError,
-        isSuccess: result.isSuccess,
-      },
-    ]);
-
+    // Save to command history buffer
+    setHistoryBuffer((prev) => [...prev, command]);
+    setHistoryPointer(-1);
     setInputVal('');
+    setIsProcessing(true);
+
+    try {
+      // Dispatch command to authoritative FastAPI backend
+      const result: DebugExecuteResponse = await DebugService.executeCommand(command);
+
+      if (result.success) {
+        soundEngine.playKeyTick();
+
+        // Mutate local Zustand state based on backend authoritative outcome
+        if (result.state_changed) {
+          const objId = (result.object_id || '').toLowerCase();
+          const prop = (result.property || '').toLowerCase();
+          const newVal = String(result.new_value || '').toUpperCase();
+
+          if (objId === 'door_01' || command.toLowerCase().includes('door_01')) {
+            if (prop === 'permission' && (newVal === 'ROOT' || newVal === 'ADMIN')) {
+              useWorldStore.getState().triggerNullCorruptionEvent();
+              setSuccessBanner('DOOR_01 UNLOCKED // PERMISSION: ROOT');
+            } else if (prop === 'permission' && newVal === 'USER') {
+              useWorldStore.getState().setDoorPermission('USER');
+            }
+          }
+        }
+
+        setHistory((prev) => [
+          ...prev,
+          {
+            id: `log-${Date.now()}-${Math.random()}`,
+            command: command,
+            output: result.message || '[DEBUG] COMMAND ACCEPTED',
+            isSuccess: true,
+          },
+        ]);
+      } else {
+        soundEngine.playWarning();
+
+        // On failure, do NOT mutate local world state
+        setHistory((prev) => [
+          ...prev,
+          {
+            id: `log-${Date.now()}-${Math.random()}`,
+            command: command,
+            output: result.message || `ERROR: ${result.error_code || 'COMMAND_FAILED'}`,
+            isError: true,
+          },
+        ]);
+      }
+    } catch (err: any) {
+      soundEngine.playWarning();
+      setHistory((prev) => [
+        ...prev,
+        {
+          id: `log-${Date.now()}-${Math.random()}`,
+          command: command,
+          output: 'CONNECTION ERROR\nSYSTEM UNREACHABLE',
+          isError: true,
+        },
+      ]);
+    } finally {
+      setIsProcessing(false);
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 50);
+    }
   };
 
   // Keyboard navigation for history (ArrowUp / ArrowDown) and Escape
@@ -146,7 +199,7 @@ Type "help" for command reference or "scan door_01" to inspect target.`,
             <span className="text-cyber-textMuted">|</span>
             <span className="text-cyber-cyanDim flex items-center gap-1.5">
               <span className="inline-block w-2 h-2 rounded-full bg-cyber-cyan animate-ping" />
-              SESSION: ACTIVE
+              BACKEND: AUTHORITATIVE_SYNC
             </span>
           </div>
 
@@ -217,6 +270,14 @@ Type "help" for command reference or "scan door_01" to inspect target.`,
               </pre>
             </div>
           ))}
+
+          {/* SUBTLE PROCESSING / EXECUTION SPINNER */}
+          {isProcessing && (
+            <div className="flex items-center gap-2 pl-4 text-xs text-cyber-cyan animate-pulse">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>[EXEC] QUERYING AUTHORITATIVE KERNEL PROTOCOL...</span>
+            </div>
+          )}
         </div>
 
         {/* QUICK COMMAND SHORTCUT BAR */}
@@ -229,20 +290,21 @@ Type "help" for command reference or "scan door_01" to inspect target.`,
           {[
             'scan door_01',
             'rewrite door_01.permission=root',
-            'scan server_01',
-            'status',
-            'help',
+            'scan terminal_01',
+            'scan memory_01',
+            'scan',
             'clear',
           ].map((cmd) => (
             <button
               key={cmd}
               type="button"
+              disabled={isProcessing}
               onClick={(e) => {
                 e.stopPropagation();
                 setInputVal(cmd);
                 handleExecute(cmd);
               }}
-              className="px-2.5 py-1 rounded border border-cyber-border bg-cyber-surface/60 hover:border-cyber-cyan hover:bg-cyber-cyan/10 hover:text-cyber-cyan transition-all shrink-0 font-mono"
+              className="px-2.5 py-1 rounded border border-cyber-border bg-cyber-surface/60 hover:border-cyber-cyan hover:bg-cyber-cyan/10 hover:text-cyber-cyan transition-all shrink-0 font-mono disabled:opacity-50"
             >
               {cmd}
             </button>
@@ -256,23 +318,33 @@ Type "help" for command reference or "scan door_01" to inspect target.`,
             ref={inputRef}
             type="text"
             value={inputVal}
+            disabled={isProcessing}
             onChange={(e) => setInputVal(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="scan door_01  |  rewrite door_01.permission=root  |  help"
-            className="flex-1 bg-transparent border-none outline-none font-mono text-sm sm:text-base text-cyber-cyan tracking-wider placeholder:text-cyber-textMuted/60"
+            placeholder={
+              isProcessing
+                ? 'Processing command...'
+                : 'scan door_01  |  rewrite door_01.permission=root  |  help'
+            }
+            className="flex-1 bg-transparent border-none outline-none font-mono text-sm sm:text-base text-cyber-cyan tracking-wider placeholder:text-cyber-textMuted/60 disabled:opacity-50"
             autoFocus
             spellCheck={false}
           />
           <button
             type="button"
+            disabled={isProcessing}
             onClick={(e) => {
               e.stopPropagation();
               handleExecute();
             }}
-            className="px-4 py-2 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/60 rounded text-cyber-cyan text-xs font-bold transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 bg-cyber-cyan/15 hover:bg-cyber-cyan/25 border border-cyber-cyan/60 rounded text-cyber-cyan text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
           >
-            <CornerDownLeft className="w-3.5 h-3.5" />
-            <span>EXECUTE</span>
+            {isProcessing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <CornerDownLeft className="w-3.5 h-3.5" />
+            )}
+            <span>{isProcessing ? 'PROCESSING' : 'EXECUTE'}</span>
           </button>
         </div>
       </div>
