@@ -1,23 +1,39 @@
-from fastapi import APIRouter
-from app.schemas.debug import CommandRequest, CommandResponse
-from app.debug_engine.command_executor import CommandExecutor
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
+from app.models.user import User
+from app.routers.auth import get_current_user
+from app.schemas.debug import DebugExecuteRequest, DebugExecuteResponse
+from app.debug_engine.command_executor import AuthoritativeCommandExecutor
 
 router = APIRouter(prefix="/api/debug", tags=["Debug Terminal"])
 
 
-@router.post("/execute", response_model=CommandResponse)
-async def execute_debug_command(req: CommandRequest):
+@router.post("/execute", response_model=DebugExecuteResponse)
+async def execute_debug_command_endpoint(
+    req: DebugExecuteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Executes a terminal debug command (e.g. 'scan door_01', 'rewrite door_01.permission=root').
+    Safely executes a debug command (e.g. 'scan door_01', 'rewrite door_01.permission=root')
+    against the server's authoritative game state.
     """
-    session_id = req.session_id or "default_session"
-    result = CommandExecutor.execute(req.command, session_id)
-    return CommandResponse(
-        success=result.get("success", True),
+    result = await AuthoritativeCommandExecutor.execute_command(
+        db=db,
+        session_id=req.session_id,
+        user_id=current_user.id,
+        raw_command=req.command,
+    )
+    return DebugExecuteResponse(
+        success=result.get("success", False),
         command=req.command,
-        output=result.get("output", ""),
-        is_error=result.get("is_error", False),
-        is_success=result.get("is_success", True),
+        object_id=result.get("object_id"),
+        property=result.get("property"),
+        old_value=result.get("old_value"),
+        new_value=result.get("new_value"),
+        message=result.get("message", ""),
+        error_code=result.get("error_code"),
         state_changed=result.get("state_changed", False),
         updated_state=result.get("updated_state"),
     )
