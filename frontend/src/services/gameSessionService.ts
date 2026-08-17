@@ -54,10 +54,43 @@ export interface SerializedGameState {
 
 export class GameSessionService {
   /**
+   * Ensures the operator is authenticated against the backend.
+   */
+  static async ensureAuthenticated(): Promise<string> {
+    const token = ApiClient.getToken();
+    if (token) return token;
+
+    try {
+      const creds = {
+        email: 'operator_01@nullroot.net',
+        password: 'Password123!',
+      };
+      try {
+        const loginRes = await ApiClient.post<{ access_token: string }>('/api/auth/login', creds);
+        ApiClient.setToken(loginRes.access_token);
+        return loginRes.access_token;
+      } catch {
+        await ApiClient.post('/api/auth/register', {
+          username: 'OPERATOR_01',
+          email: creds.email,
+          password: creds.password,
+        });
+        const loginRes = await ApiClient.post<{ access_token: string }>('/api/auth/login', creds);
+        ApiClient.setToken(loginRes.access_token);
+        return loginRes.access_token;
+      }
+    } catch (e) {
+      console.warn('[GameSessionService] Auth fallback notice:', e);
+      return '';
+    }
+  }
+
+  /**
    * Retrieves all game sessions for authenticated operator.
    */
   static async listSessions(): Promise<GameSessionSummary[]> {
     try {
+      await this.ensureAuthenticated();
       return await ApiClient.get<GameSessionSummary[]>('/api/game/sessions');
     } catch (e) {
       console.warn('[GameSessionService] Failed to list sessions:', e);
@@ -69,10 +102,12 @@ export class GameSessionService {
    * Initializes a new authoritative game session on the server.
    */
   static async createSession(customName?: string): Promise<GameSessionDetailResponse> {
+    await this.ensureAuthenticated();
     const session = await ApiClient.post<GameSessionDetailResponse>('/api/game/sessions', {
       custom_name: customName,
     });
     localStorage.setItem('null_root_session_id', session.id);
+    this.applySessionToWorld(session);
     return session;
   }
 
@@ -80,6 +115,7 @@ export class GameSessionService {
    * Reconstructs full game session from server database.
    */
   static async getSession(sessionId: string): Promise<GameSessionDetailResponse> {
+    await this.ensureAuthenticated();
     return await ApiClient.get<GameSessionDetailResponse>(`/api/game/sessions/${sessionId}`);
   }
 

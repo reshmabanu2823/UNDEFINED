@@ -76,6 +76,23 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
       // If locked, stop at door (-11.2). If unlocked, allow walking through into exit area (-15.2)
       const minZ = isDoorLocked ? -11.2 : -15.2;
       pos.z = Math.max(minZ, Math.min(-2.0, pos.z));
+
+      // Trigger Sector 02 completion when walking through unlocked door
+      if (!isDoorLocked && pos.z <= -12.5) {
+        const store = useWorldStore.getState();
+        if (store.currentSector !== 'sector_02') {
+          store.setSector('sector_02');
+          store.setObjective('SECTOR 02 ACCESSED');
+          store.addNotification({
+            title: 'SECTOR 02 REACHED',
+            message: 'Neural gateway traversed. Sector 02 entered.',
+            type: 'SUCCESS',
+          });
+          import('../../services/questService').then(({ QuestService }) => {
+            QuestService.progressObjective('ACCESS_SECTOR_02', 'ENTER_SECTOR_02');
+          });
+        }
+      }
     }
 
     // Sync position to world store
