@@ -18,7 +18,8 @@ import {
   Target,
   CheckCircle2,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Save,
 } from 'lucide-react';
 
 // Reusable Corruption Effects
@@ -29,7 +30,7 @@ import { CorruptedText } from '../../game/Effects/CorruptedText';
 import { WarningOverlay } from '../../game/Effects/WarningOverlay';
 import { SystemIntegrityHUD } from '../../components/HUD/SystemIntegrityHUD';
 import { SystemFailure } from '../../components/SystemFailure/SystemFailure';
-
+import { SaveLoadModal } from '../../components/SaveLoadModal/SaveLoadModal';
 import { useGameWebSocket } from '../../hooks/useGameWebSocket';
 
 export interface GameProps {
@@ -38,6 +39,7 @@ export interface GameProps {
 
 export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
   const { connectionStatus, isConnected } = useGameWebSocket();
 
   const { targeted, activeModal } = useInteractionState();
@@ -145,6 +147,17 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
               <span>MAIN MENU (ESC)</span>
             </button>
           )}
+
+          <button
+            onClick={() => {
+              soundEngine.playKeyTick();
+              setIsSaveModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 bg-cyber-surfaceAlt hover:bg-cyber-cyan/20 border border-cyber-border hover:border-cyber-cyan/60 rounded text-cyber-cyan transition-all font-mono"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>CHECKPOINTS</span>
+          </button>
 
           <div className="flex items-center gap-2">
             <span
@@ -338,6 +351,13 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
 
       {/* INTERACTIVE MODAL DIALOGS */}
       <InteractionModalContainer />
+
+      {/* IN-GAME SAVE / LOAD CHECKPOINT MODAL */}
+      <SaveLoadModal
+        isOpen={isSaveModalOpen}
+        onClose={() => setIsSaveModalOpen(false)}
+        mode="SAVE"
+      />
 
       {/* SYSTEM FAILURE GAME OVER SCREEN */}
       <SystemFailure />

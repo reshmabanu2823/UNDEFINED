@@ -105,6 +105,7 @@ async def save_session_endpoint(
         user_id=current_user.id,
         save_name=save_req.save_name,
         slot_number=save_req.slot_number,
+        client_state=save_req.client_state,
     )
     if not save_obj:
         raise HTTPException(

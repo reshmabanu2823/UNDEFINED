@@ -15,6 +15,9 @@ import {
   Binary
 } from 'lucide-react';
 
+import { SaveLoadModal } from '../SaveLoadModal/SaveLoadModal';
+import { GameSessionService } from '../../services/gameSessionService';
+
 export interface MainMenuProps {
   onStartNewGame?: () => void;
   onReboot?: () => void;
@@ -32,7 +35,7 @@ const MENU_OPTIONS: MenuOption[] = [
     id: 'continue',
     label: 'CONTINUE',
     subtext: 'RESTORE LAST SYNC POINT',
-    available: false,
+    available: true,
   },
   {
     id: 'new_game',
@@ -44,7 +47,7 @@ const MENU_OPTIONS: MenuOption[] = [
     id: 'load_game',
     label: 'LOAD GAME',
     subtext: 'QUERY MEMORY CORE ARCHIVE',
-    available: false,
+    available: true,
   },
   {
     id: 'settings',
@@ -65,6 +68,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
   const [noticeMessage, setNoticeMessage] = useState<string | null>(null);
   const [isShuttingDown, setIsShuttingDown] = useState<boolean>(false);
   const [telemetryCount, setTelemetryCount] = useState<number>(1024);
+  const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
+  const [saveModalMode, setSaveModalMode] = useState<'SAVE' | 'LOAD' | 'MANAGE'>('LOAD');
 
   // Diagnostic hex telemetry ticker
   useEffect(() => {
@@ -74,17 +79,32 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
     return () => clearInterval(timer);
   }, []);
 
-  const handleAction = useCallback((option: MenuOption) => {
-    if (option.id === 'new_game') {
+  const handleAction = useCallback(async (option: MenuOption) => {
+    if (option.id === 'continue') {
+      soundEngine.playKeyTick();
+      const sessions = await GameSessionService.listSessions();
+      if (sessions.length > 0) {
+        soundEngine.playBootTransition();
+        await GameSessionService.loadSession(sessions[0].id, 1);
+        onStartNewGame?.();
+      } else {
+        setSaveModalMode('CONTINUE' as any);
+        setSaveModalOpen(true);
+      }
+    } else if (option.id === 'new_game') {
       soundEngine.playBootTransition();
+      await GameSessionService.createSession('INITIAL_RUN');
       if (onStartNewGame) {
         onStartNewGame();
       }
+    } else if (option.id === 'load_game') {
+      soundEngine.playKeyTick();
+      setSaveModalMode('LOAD');
+      setSaveModalOpen(true);
     } else if (option.id === 'exit') {
       soundEngine.playGlitch();
       setIsShuttingDown(true);
     } else {
-      // CONTINUE, LOAD GAME, SETTINGS
       soundEngine.playWarning();
       setNoticeMessage(`FUNCTION UNAVAILABLE // [${option.label}] PROTOCOL LOCKED`);
     }
@@ -329,6 +349,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
           />
         )}
       </AnimatePresence>
+
+      {/* SAVE / LOAD / MANAGE SESSIONS MODAL */}
+      <SaveLoadModal
+        isOpen={saveModalOpen}
+        mode={saveModalMode}
+        onClose={() => setSaveModalOpen(false)}
+        onSessionLoaded={() => {
+          setSaveModalOpen(false);
+          onStartNewGame?.();
+        }}
+      />
     </motion.div>
   );
 };

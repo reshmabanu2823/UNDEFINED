@@ -102,9 +102,12 @@ async def save_session_checkpoint(
     user_id: str,
     save_name: str = "CHECKPOINT_MANUAL",
     slot_number: int = 1,
+    client_state: Optional[Dict[str, Any]] = None,
 ) -> Optional[SaveSlot]:
     """
     Captures an authoritative snapshot of the current session state and world objects into a save slot.
+    Persists chapter, sector, system integrity, corruption level, debug abilities, world objects,
+    discovered memories, and quest progress.
     """
     session = await get_game_session_detail(db, session_id, user_id)
     if not session:
@@ -114,13 +117,20 @@ async def save_session_checkpoint(
     world_objects_map = {
         obj.object_id: obj.state_json for obj in session.world_objects
     }
+
+    client_state = client_state or {}
+
     serialized_state = {
         "current_chapter": session.current_chapter,
         "current_sector": session.current_sector,
         "system_integrity": session.system_integrity,
         "corruption_level": session.corruption_level,
         "debug_energy": session.debug_energy,
+        "debug_abilities": client_state.get("debug_abilities", ["scan", "rewrite"]),
         "world_objects": world_objects_map,
+        "discovered_memories": client_state.get("discovered_memories", []),
+        "quest_progress": client_state.get("quest_progress", {"current_objective": "ACCESS SECURITY DOOR"}),
+        "player_position": client_state.get("player_position", {"x": 0, "y": 1.65, "z": 7.5}),
     }
 
     # Upsert save slot for this slot_number

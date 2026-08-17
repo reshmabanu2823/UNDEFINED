@@ -49,6 +49,7 @@ class GameSessionDetailResponse(BaseModel):
 class SaveSessionRequest(BaseModel):
     save_name: str = Field("CHECKPOINT_MANUAL", max_length=100)
     slot_number: int = Field(1, ge=1, le=10)
+    client_state: Optional[Dict[str, Any]] = None
 
 
 class LoadSessionRequest(BaseModel):
