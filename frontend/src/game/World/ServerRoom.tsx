@@ -14,6 +14,7 @@ import { useWorldStore } from '../../stores/worldStore';
 export const ServerRoom: React.FC = () => {
   const isBlackout = useWorldStore((state) => state.isBlackout);
   const corruptionLevel = useWorldStore((state) => state.corruptionLevel);
+  const activeEnemies = useWorldStore((state) => state.activeEnemies);
 
   const light1Ref = useRef<THREE.PointLight | null>(null);
   const light2Ref = useRef<THREE.PointLight | null>(null);
@@ -219,7 +220,12 @@ export const ServerRoom: React.FC = () => {
       <GlowingCables />
 
       {/* 1. NULL_FRAGMENT ENEMY PROTOTYPE (Corrupted Humanoid Entity) */}
-      <NullFragment initialPosition={[0, 1.2, -6.5]} />
+      {activeEnemies.map((enemy) => (
+        <NullFragment key={enemy.id} initialPosition={enemy.position} />
+      ))}
+      {activeEnemies.length === 0 && corruptionLevel > 50 && (
+        <NullFragment initialPosition={[0, 1.2, -6.5]} />
+      )}
 
       {/* 4. INTERACTABLE SECURITY DOOR (door_01) */}
       <Interactable

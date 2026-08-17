@@ -5,6 +5,7 @@ export type PermissionLevel = 'USER' | 'ADMIN' | 'ROOT';
 export type DoorStatus = 'LOCKED' | 'UNLOCKED';
 export type NullEventStage = 'IDLE' | 'FREEZE' | 'BLACKOUT' | 'WARNING' | 'NULL_MESSAGE' | 'COMPLETED';
 export type EnemyAIState = 'IDLE' | 'DETECT' | 'CHASE' | 'ATTACK' | 'LOST';
+export type ConnectionStatusType = 'DISCONNECTED' | 'CONNECTING' | 'CONNECTED' | 'RECONNECTING' | 'FAILED';
 
 export interface DoorState {
   id: 'door_01';
@@ -40,6 +41,13 @@ export interface ServerState {
   integrity: number;
 }
 
+export interface ActiveEnemy {
+  id: string;
+  type: 'NULL_FRAGMENT' | string;
+  position: [number, number, number];
+  state?: EnemyAIState;
+}
+
 export interface WorldNotification {
   id: string;
   title: string;
@@ -55,47 +63,70 @@ export interface PlayerPosition {
 }
 
 export interface WorldStoreState {
-  // World Entities
+  // Required Centralized Game State Fields
+  systemIntegrity: number; // 0 - 100
+  playerIntegrity: number; // Aliased for backwards compatibility
+  corruptionLevel: number; // 20 -> 74
+  currentSector: string; // "sector_01"
+  currentObjective: string; // "ACCESS SECURITY DOOR" | "ENTER SECTOR 02"
+  worldObjects: Record<string, any>;
+  activeWarnings: string[];
+  activeEnemies: ActiveEnemy[];
+  connectionStatus: ConnectionStatusType;
+
+  // World Entities (Direct References)
   door_01: DoorState;
   terminal_01: TerminalState;
   memory_01: MemoryState;
   server_01: ServerState;
 
-  // Player & Game State
+  // Player & Gameplay State
   playerPosition: PlayerPosition;
-  playerIntegrity: number; // 0 - 100
   isSystemFailure: boolean;
-  currentObjective: string;
+  isGameplayFrozen: boolean;
   notifications: WorldNotification[];
 
-  // Corruption & NULL Event State
-  corruptionLevel: number;
+  // Corruption & Visual Overlay States
   isBlackout: boolean;
   nullEventStage: NullEventStage;
   nullEntityVisible: boolean;
 
-  // Enemy Threat State
+  // Enemy Threat Telemetry
   enemyState: EnemyAIState;
   enemyDistance: number;
 
   // Actions
+  setConnectionStatus: (status: ConnectionStatusType) => void;
   setPlayerPosition: (pos: PlayerPosition) => void;
   damagePlayer: (amount: number) => void;
   healPlayer: (amount: number) => void;
   setEnemyState: (state: EnemyAIState, distance?: number) => void;
+  spawnEnemy: (enemy: ActiveEnemy) => void;
   setTerminalActive: (active: boolean) => void;
   setDoorPermission: (permission: PermissionLevel) => void;
   unlockDoor: () => void;
   setObjective: (objective: string) => void;
+  setSector: (sector: string) => void;
   setCorruptionLevel: (level: number) => void;
   addNotification: (notif: Omit<WorldNotification, 'id' | 'timestamp'>) => void;
   dismissNotification: (id: string) => void;
-  triggerNullCorruptionEvent: () => void;
+  clearWarnings: () => void;
+
+  // Authoritative Backend Event Consumer
+  handleBackendCorruptionEvent: (payload: {
+    previous_level?: number;
+    new_level?: number;
+    severity?: string;
+    message?: string;
+  }) => void;
+
   rewriteProperty: (
     objectId: string,
     property: string,
     value: string
   ) => { success: boolean; message: string };
+
+  triggerNullCorruptionEvent: () => void;
   resetWorldState: () => void;
   rebootSystem: () => void;
 }
@@ -135,19 +166,35 @@ const INITIAL_SERVER_STATE: ServerState = {
 };
 
 export const useWorldStore = create<WorldStoreState>((set, get) => ({
+  // Core Centralized Fields
+  systemIntegrity: 100,
+  playerIntegrity: 100,
+  corruptionLevel: 20,
+  currentSector: 'sector_01',
+  currentObjective: 'ACCESS SECURITY DOOR',
+  worldObjects: {
+    door_01: { ...INITIAL_DOOR_STATE },
+    terminal_01: { ...INITIAL_TERMINAL_STATE },
+    memory_01: { ...INITIAL_MEMORY_STATE },
+    server_01: { ...INITIAL_SERVER_STATE },
+  },
+  activeWarnings: [],
+  activeEnemies: [],
+  connectionStatus: 'DISCONNECTED',
+
+  // World Entities
   door_01: { ...INITIAL_DOOR_STATE },
   terminal_01: { ...INITIAL_TERMINAL_STATE },
   memory_01: { ...INITIAL_MEMORY_STATE },
   server_01: { ...INITIAL_SERVER_STATE },
 
+  // Player & Gameplay State
   playerPosition: { x: 0, y: 1.65, z: 7.5 },
-  playerIntegrity: 100,
   isSystemFailure: false,
-  currentObjective: 'ACCESS SECURITY DOOR',
+  isGameplayFrozen: false,
   notifications: [],
 
-  // Initial Corruption Level: 21%
-  corruptionLevel: 21,
+  // Initial Corruption Level: 20%
   isBlackout: false,
   nullEventStage: 'IDLE',
   nullEntityVisible: false,
@@ -155,57 +202,89 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
   enemyState: 'IDLE',
   enemyDistance: 999,
 
+  setConnectionStatus: (status) => set({ connectionStatus: status }),
+  setSector: (sector) => set({ currentSector: sector }),
+
   setPlayerPosition: (pos) => set({ playerPosition: pos }),
 
   damagePlayer: (amount) => {
-    const current = get().playerIntegrity;
+    const current = get().systemIntegrity;
     if (current <= 0 || get().isSystemFailure) return;
 
     const next = Math.max(0, current - amount);
     soundEngine.playWarning();
 
     if (next <= 0) {
-      set({ playerIntegrity: 0, isSystemFailure: true });
+      set({ systemIntegrity: 0, playerIntegrity: 0, isSystemFailure: true });
       soundEngine.playNullAwakeningSound();
     } else {
-      set({ playerIntegrity: next });
+      set({ systemIntegrity: next, playerIntegrity: next });
     }
   },
 
   healPlayer: (amount) => {
-    set((state) => ({
-      playerIntegrity: Math.min(100, state.playerIntegrity + amount),
-    }));
+    set((state) => {
+      const next = Math.min(100, state.systemIntegrity + amount);
+      return { systemIntegrity: next, playerIntegrity: next };
+    });
   },
 
   setEnemyState: (state, distance = 999) => {
     set({ enemyState: state, enemyDistance: distance });
   },
 
+  spawnEnemy: (enemy) => {
+    set((state) => {
+      const exists = state.activeEnemies.some((e) => e.id === enemy.id);
+      if (exists) return state;
+      return { activeEnemies: [...state.activeEnemies, enemy] };
+    });
+  },
+
   setTerminalActive: (active) =>
     set((state) => ({
       terminal_01: { ...state.terminal_01, active },
+      worldObjects: {
+        ...state.worldObjects,
+        terminal_01: { ...state.terminal_01, active },
+      },
     })),
 
   setDoorPermission: (permission) => {
     const isRoot = permission === 'ROOT' || permission === 'ADMIN';
-    if (isRoot) {
-      get().triggerNullCorruptionEvent();
-    } else {
-      set((state) => ({
-        door_01: {
-          ...state.door_01,
-          permission,
-          locked: true,
-          status: 'LOCKED',
+    set((state) => {
+      const updatedDoor: DoorState = {
+        ...state.door_01,
+        permission,
+        locked: !isRoot,
+        status: isRoot ? 'UNLOCKED' : 'LOCKED',
+      };
+      return {
+        door_01: updatedDoor,
+        worldObjects: {
+          ...state.worldObjects,
+          door_01: updatedDoor,
         },
-        currentObjective: 'ACCESS SECURITY DOOR',
-      }));
-    }
+        currentObjective: isRoot ? 'ENTER SECTOR 02' : 'ACCESS SECURITY DOOR',
+      };
+    });
   },
 
   unlockDoor: () => {
-    get().triggerNullCorruptionEvent();
+    set((state) => {
+      const updatedDoor: DoorState = {
+        ...state.door_01,
+        permission: 'ROOT',
+        locked: false,
+        status: 'UNLOCKED',
+      };
+      return {
+        door_01: updatedDoor,
+        worldObjects: { ...state.worldObjects, door_01: updatedDoor },
+        currentObjective: 'ENTER SECTOR 02',
+      };
+    });
+    soundEngine.playDoorUnlock();
   },
 
   setObjective: (objective) => set({ currentObjective: objective }),
@@ -228,10 +307,18 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
       notifications: state.notifications.filter((n) => n.id !== id),
     })),
 
-  // THE FULL NULL CORRUPTION EVENT ORCHESTRATOR
-  triggerNullCorruptionEvent: () => {
-    // 1. Door unlock succeeds
+  clearWarnings: () => set({ activeWarnings: [] }),
+
+  // CONSUMES AUTHORITATIVE NULL_CORRUPTION FROM FASTAPI BACKEND WEBSOCKET
+  handleBackendCorruptionEvent: (payload) => {
+    const prevLvl = payload.previous_level ?? 20;
+    const targetLvl = payload.new_level ?? 74;
+
+    // 1. Freeze normal gameplay very briefly
     set((state) => ({
+      nullEventStage: 'FREEZE',
+      isGameplayFrozen: true,
+      activeWarnings: ['SYSTEM WARNING: UNKNOWN PROCESS DETECTED'],
       door_01: {
         ...state.door_01,
         permission: 'ROOT',
@@ -239,18 +326,16 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         status: 'UNLOCKED',
       },
       currentObjective: 'ENTER SECTOR 02',
-      nullEventStage: 'FREEZE',
     }));
-
     soundEngine.playDoorUnlock();
 
-    // 2. Freeze & flicker -> Blackout (0.5s - 1.0s)
+    // 2. Blackout & Light Flicker (0.6s - 0.9s)
     setTimeout(() => {
       set({ isBlackout: true, nullEventStage: 'BLACKOUT' });
       soundEngine.playGlitch();
 
       setTimeout(() => {
-        // 3. System Warning Screen & audio distortion
+        // 3. SYSTEM WARNING: UNKNOWN PROCESS DETECTED
         set({
           isBlackout: false,
           nullEventStage: 'WARNING',
@@ -258,9 +343,8 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
         });
         soundEngine.playNullAwakeningSound();
 
-        // 4. Animate corruption rising 21% -> 74%
-        let currentLvl = 21;
-        const targetLvl = 74;
+        // 4. Animate Corruption Meter: 20% -> 74%
+        let currentLvl = prevLvl;
         const interval = setInterval(() => {
           currentLvl += 3;
           if (currentLvl >= targetLvl) {
@@ -268,29 +352,39 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
             clearInterval(interval);
           }
           set({ corruptionLevel: currentLvl });
-        }, 60);
+        }, 50);
 
-        // 5. Reveal "NULL: hello." message
+        // 5. Reveal NULL: hello.
         setTimeout(() => {
           set({ nullEventStage: 'NULL_MESSAGE' });
           soundEngine.playWarning();
 
-          // 6. Complete event & transition to high-corruption ambient gameplay
+          // 6. Spawn NULL_FRAGMENT enemy & resume gameplay
           setTimeout(() => {
-            set({
+            set((state) => ({
               nullEventStage: 'COMPLETED',
               nullEntityVisible: false,
-            });
+              isGameplayFrozen: false,
+              activeEnemies: [
+                ...state.activeEnemies.filter((e) => e.id !== 'null_fragment_01'),
+                {
+                  id: 'null_fragment_01',
+                  type: 'NULL_FRAGMENT',
+                  position: [0, 1.2, -6.5],
+                  state: 'DETECT',
+                },
+              ],
+            }));
 
             get().addNotification({
-              title: 'CORRUPTION SURGE // SECTOR 00',
-              message: 'NULL process actively overwriting neural cortex. Proceed to Sector 02 immediately.',
+              title: 'CORRUPTION SURGE // SECTOR 01',
+              message: payload.message || 'NULL process active in sector. Entity materialized.',
               type: 'ERROR',
             });
-          }, 3500);
+          }, 3200);
         }, 2200);
-      }, 800);
-    }, 350);
+      }, 750);
+    }, 300);
   },
 
   rewriteProperty: (objectId, property, value) => {
@@ -299,99 +393,51 @@ export const useWorldStore = create<WorldStoreState>((set, get) => ({
     const valLower = value.toLowerCase().trim();
 
     if (objIdLower === 'door_01') {
-      if (propLower === 'permission' || propLower === 'permissionlevel') {
+      if (propLower === 'permission') {
         if (valLower === 'root' || valLower === 'admin') {
           get().triggerNullCorruptionEvent();
-
-          return {
-            success: true,
-            message: `[DEBUG] COMMAND ACCEPTED\n[WORLD] permission = ROOT\n[WORLD] status = UNLOCKED\n[!] CRITICAL: UNKNOWN PROCESS AWAKENED`,
-          };
-        } else if (valLower === 'user') {
-          set((state) => ({
-            door_01: {
-              ...state.door_01,
-              permission: 'USER',
-              locked: true,
-              status: 'LOCKED',
-            },
-            currentObjective: 'ACCESS SECURITY DOOR',
-          }));
-          return {
-            success: true,
-            message: `[DEBUG] COMMAND ACCEPTED\n[WORLD] permission = USER\n[WORLD] status = LOCKED`,
-          };
-        }
-      } else if (propLower === 'locked') {
-        const isLocked = valLower === 'true' || valLower === '1';
-        if (!isLocked) {
-          get().triggerNullCorruptionEvent();
+          return { success: true, message: '[DEBUG] PERMISSION ELEVATED TO ROOT' };
         } else {
-          set((state) => ({
-            door_01: {
-              ...state.door_01,
-              locked: true,
-              status: 'LOCKED',
-            },
-          }));
-        }
-        return {
-          success: true,
-          message: `[DEBUG] COMMAND ACCEPTED\n[WORLD] locked = ${isLocked}\n[WORLD] status = ${!isLocked ? 'UNLOCKED' : 'LOCKED'}`,
-        };
-      }
-    }
-
-    if (objIdLower === 'server_01') {
-      if (propLower === 'status') {
-        set((state) => ({
-          server_01: { ...state.server_01, status: value.toUpperCase() },
-        }));
-        return { success: true, message: `[WORLD] server_01.status = ${value.toUpperCase()}` };
-      }
-      if (propLower === 'integrity') {
-        const num = parseFloat(value);
-        if (!isNaN(num)) {
-          const clamped = Math.max(0, Math.min(100, num));
-          set((state) => ({
-            server_01: { ...state.server_01, integrity: clamped },
-          }));
-          return { success: true, message: `[WORLD] server_01.integrity = ${clamped}%` };
+          get().setDoorPermission('USER');
+          return { success: true, message: '[DEBUG] PERMISSION SET TO USER' };
         }
       }
     }
+    return { success: true, message: `[DEBUG] ${objectId}.${property} updated.` };
+  },
 
-    if (objIdLower === 'memory_01') {
-      if (propLower === 'recovery' || propLower === 'recoverypercentage') {
-        const num = parseFloat(value);
-        if (!isNaN(num)) {
-          const clamped = Math.max(0, Math.min(100, num));
-          set((state) => ({
-            memory_01: { ...state.memory_01, recoveryPercentage: clamped },
-          }));
-          return { success: true, message: `[WORLD] memory_01.recovery = ${clamped}%` };
-        }
-      }
-    }
-
-    return {
-      success: false,
-      message: `INVALID_PROPERTY: Cannot rewrite property "${property}" on entity "${objectId}".`,
-    };
+  triggerNullCorruptionEvent: () => {
+    get().handleBackendCorruptionEvent({
+      previous_level: get().corruptionLevel,
+      new_level: 74,
+      severity: 'HIGH',
+      message: 'Unknown process detected',
+    });
   },
 
   resetWorldState: () =>
     set({
+      systemIntegrity: 100,
+      playerIntegrity: 100,
+      corruptionLevel: 20,
+      currentSector: 'sector_01',
+      currentObjective: 'ACCESS SECURITY DOOR',
+      worldObjects: {
+        door_01: { ...INITIAL_DOOR_STATE },
+        terminal_01: { ...INITIAL_TERMINAL_STATE },
+        memory_01: { ...INITIAL_MEMORY_STATE },
+        server_01: { ...INITIAL_SERVER_STATE },
+      },
+      activeWarnings: [],
+      activeEnemies: [],
       door_01: { ...INITIAL_DOOR_STATE },
       terminal_01: { ...INITIAL_TERMINAL_STATE },
       memory_01: { ...INITIAL_MEMORY_STATE },
       server_01: { ...INITIAL_SERVER_STATE },
       playerPosition: { x: 0, y: 1.65, z: 7.5 },
-      playerIntegrity: 100,
       isSystemFailure: false,
-      currentObjective: 'ACCESS SECURITY DOOR',
+      isGameplayFrozen: false,
       notifications: [],
-      corruptionLevel: 21,
       isBlackout: false,
       nullEventStage: 'IDLE',
       nullEntityVisible: false,

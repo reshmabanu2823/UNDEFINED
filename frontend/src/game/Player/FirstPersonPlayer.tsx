@@ -27,8 +27,11 @@ export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
     camera.rotation.set(0, 0, 0);
   }, [camera]);
 
+  const isGameplayFrozen = useWorldStore((state) => state.isGameplayFrozen);
+  const isBlackout = useWorldStore((state) => state.isBlackout);
+
   useFrame((_, delta) => {
-    if (!isLocked) return;
+    if (!isLocked || isGameplayFrozen || isBlackout) return;
 
     const baseSpeed = movement.sprint ? 7.5 : 4.5;
     const friction = 10.0;

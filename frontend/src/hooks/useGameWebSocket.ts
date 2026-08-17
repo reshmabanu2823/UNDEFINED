@@ -21,9 +21,10 @@ export const useGameWebSocket = (sessionId?: string): UseGameWebSocketReturn => 
     // 2. Track Connection Status
     const unsubStatus = gameWs.onStatusChange((status) => {
       setConnectionStatus(status);
+      useWorldStore.getState().setConnectionStatus(status);
     });
 
-    // 3. Handle WORLD_STATE_CHANGED
+    // 3. Handle WORLD_STATE_CHANGED (Authoritative Backend State)
     const unsubWorld = gameWs.on('WORLD_STATE_CHANGED', (event) => {
       setLastEvent(event);
       const payload = event.payload || {};
@@ -35,7 +36,7 @@ export const useGameWebSocket = (sessionId?: string): UseGameWebSocketReturn => 
         const isLocked = state.locked !== undefined ? state.locked : true;
 
         if (perm === 'ROOT' || !isLocked) {
-          useWorldStore.getState().triggerNullCorruptionEvent();
+          useWorldStore.getState().unlockDoor();
         } else {
           useWorldStore.getState().setDoorPermission(perm);
         }
@@ -46,14 +47,11 @@ export const useGameWebSocket = (sessionId?: string): UseGameWebSocketReturn => 
       }
     });
 
-    // 4. Handle NULL_CORRUPTION
+    // 4. Handle NULL_CORRUPTION (Authoritative Backend Event)
     const unsubCorruption = gameWs.on('NULL_CORRUPTION', (event) => {
       setLastEvent(event);
       const payload = event.payload || {};
-      if (payload.level !== undefined) {
-        useWorldStore.getState().setCorruptionLevel(payload.level);
-      }
-      useWorldStore.getState().triggerNullCorruptionEvent();
+      useWorldStore.getState().handleBackendCorruptionEvent(payload);
     });
 
     // 5. Handle SYSTEM_WARNING
@@ -73,6 +71,12 @@ export const useGameWebSocket = (sessionId?: string): UseGameWebSocketReturn => 
       setLastEvent(event);
       const payload = event.payload || {};
       soundEngine.playWarning();
+      useWorldStore.getState().spawnEnemy({
+        id: payload.enemy_id || `enemy_${Date.now()}`,
+        type: payload.enemy_type || 'NULL_FRAGMENT',
+        position: payload.position || [0, 1.2, -6.5],
+        state: payload.state || 'DETECT',
+      });
       useWorldStore.getState().setEnemyState(payload.state || 'DETECT', payload.distance || 15);
       useWorldStore.getState().addNotification({
         title: 'THREAT DETECTED',
@@ -93,7 +97,7 @@ export const useGameWebSocket = (sessionId?: string): UseGameWebSocketReturn => 
     // 8. Handle SYSTEM_FAILURE
     const unsubFailure = gameWs.on('SYSTEM_FAILURE', (event) => {
       setLastEvent(event);
-      useWorldStore.setState({ playerIntegrity: 0, isSystemFailure: true });
+      useWorldStore.setState({ systemIntegrity: 0, playerIntegrity: 0, isSystemFailure: true });
       soundEngine.playNullAwakeningSound();
     });
 
