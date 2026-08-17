@@ -28,7 +28,7 @@ class User(Base):
     )
 
     # Relationships
-    profile = relationship("PlayerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    profile = relationship("PlayerProfile", back_populates="user", uselist=False, lazy="selectin", cascade="all, delete-orphan")
     sessions = relationship("GameSession", back_populates="user", cascade="all, delete-orphan")
     saves = relationship("SaveSlot", back_populates="user", cascade="all, delete-orphan")
     quest_progress = relationship("QuestProgress", back_populates="user", cascade="all, delete-orphan")

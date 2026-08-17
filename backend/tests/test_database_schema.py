@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
@@ -18,11 +19,12 @@ from app.utils.security import get_password_hash
 
 @pytest.mark.asyncio
 async def test_full_database_schema():
+    uid = uuid.uuid4().hex[:8]
     async with AsyncSessionLocal() as session:
         # 1. Create User
         test_user = User(
-            username="operator_0x01",
-            email="operator01@nullroot.net",
+            username=f"operator_{uid}",
+            email=f"operator_{uid}@nullroot.net",
             password_hash=get_password_hash("secure_neural_pass_00"),
         )
         session.add(test_user)
@@ -33,7 +35,7 @@ async def test_full_database_schema():
         # 2. Create PlayerProfile
         profile = PlayerProfile(
             user_id=test_user.id,
-            display_name="CORTEX_OVERRIDER",
+            display_name=f"CORTEX_{uid}",
             system_integrity=100,
             corruption_level=21,
             debug_energy=100,
@@ -76,7 +78,7 @@ async def test_full_database_schema():
 
         # 6. Create Quest & QuestProgress
         quest = Quest(
-            quest_key="ACCESS_SECURITY_DOOR",
+            quest_key=f"ACCESS_SECURITY_DOOR_{uid}",
             title="Access Security Door",
             description="Elevate permissions on door_01 to ROOT.",
             chapter="CHAPTER_00",
@@ -95,8 +97,8 @@ async def test_full_database_schema():
 
         # 7. Create MemoryFragment & DiscoveredMemory
         memory = MemoryFragment(
-            memory_key="cortex_leak_0x00",
-            title="Cortex Leak Archive 00",
+            memory_key=f"cortex_leak_{uid}",
+            title="Cortex Leak Archive",
             content="NULL process memory logs uncovered in sector 00.",
             integrity=34.2,
             chapter="CHAPTER_00",
@@ -124,15 +126,15 @@ async def test_full_database_schema():
         # 9. Verify Queries and Relationships
         # Query User by username
         user_res = await session.execute(
-            select(User).where(User.username == "operator_0x01")
+            select(User).where(User.username == f"operator_{uid}")
         )
         queried_user = user_res.scalars().first()
         assert queried_user is not None
-        assert queried_user.email == "operator01@nullroot.net"
+        assert queried_user.email == f"operator_{uid}@nullroot.net"
 
         # Query Quest by quest_key
         quest_res = await session.execute(
-            select(Quest).where(Quest.quest_key == "ACCESS_SECURITY_DOOR")
+            select(Quest).where(Quest.quest_key == f"ACCESS_SECURITY_DOOR_{uid}")
         )
         queried_quest = quest_res.scalars().first()
         assert queried_quest is not None
@@ -140,7 +142,7 @@ async def test_full_database_schema():
 
         # Query Memory by memory_key
         mem_res = await session.execute(
-            select(MemoryFragment).where(MemoryFragment.memory_key == "cortex_leak_0x00")
+            select(MemoryFragment).where(MemoryFragment.memory_key == f"cortex_leak_{uid}")
         )
         queried_mem = mem_res.scalars().first()
         assert queried_mem is not None
