@@ -1,5 +1,22 @@
-from app.schemas.auth import UserBase, UserCreate, UserLogin, UserResponse, Token, TokenPayload
-from app.schemas.game import GameSaveCreate, GameSaveResponse, WorldStateSync, PlayerPositionSchema
+from app.schemas.auth import (
+    UserBase,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    Token,
+    TokenPayload,
+    PlayerProfileResponse,
+)
+from app.schemas.game import (
+    GameSessionCreate,
+    GameSessionSummary,
+    GameSessionDetailResponse,
+    SaveSessionRequest,
+    LoadSessionRequest,
+    SaveSlotResponse,
+    WorldStateSync,
+    PlayerPositionSchema,
+)
 from app.schemas.debug import CommandRequest, CommandResponse
 
 __all__ = [
@@ -9,8 +26,13 @@ __all__ = [
     "UserResponse",
     "Token",
     "TokenPayload",
-    "GameSaveCreate",
-    "GameSaveResponse",
+    "PlayerProfileResponse",
+    "GameSessionCreate",
+    "GameSessionSummary",
+    "GameSessionDetailResponse",
+    "SaveSessionRequest",
+    "LoadSessionRequest",
+    "SaveSlotResponse",
     "WorldStateSync",
     "PlayerPositionSchema",
     "CommandRequest",

@@ -1,40 +1,147 @@
-from typing import List, Optional
-from sqlalchemy import select
+from typing import List, Optional, Dict, Any
+from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.save_slot import SaveSlot
 from app.models.game_session import GameSession
 from app.models.world_object import WorldObject
-from app.schemas.game import GameSaveCreate, WorldStateSync
+from app.models.save_slot import SaveSlot
 
 
-async def save_game_state(
-    db: AsyncSession, user_id: str, save_in: GameSaveCreate
-) -> SaveSlot:
-    # Check if a save already exists for this slot
+INITIAL_WORLD_OBJECTS = [
+    {
+        "object_id": "door_01",
+        "object_type": "SECURITY_DOOR",
+        "state_json": {
+            "locked": True,
+            "permission": "USER",
+        },
+    },
+    {
+        "object_id": "terminal_01",
+        "object_type": "DEBUG_TERMINAL",
+        "state_json": {
+            "active": True,
+        },
+    },
+    {
+        "object_id": "memory_01",
+        "object_type": "MEMORY_FRAGMENT",
+        "state_json": {
+            "discovered": False,
+            "integrity": 100,
+        },
+    },
+]
+
+
+async def create_game_session(
+    db: AsyncSession, user_id: str
+) -> GameSession:
+    """
+    Initializes a new authoritative game session with default player diagnostics and initial world objects.
+    """
+    session = GameSession(
+        user_id=user_id,
+        current_chapter=1,
+        current_sector="sector_01",
+        system_integrity=100,
+        corruption_level=20,
+        debug_energy=100,
+        is_active=True,
+    )
+    db.add(session)
+    await db.flush()  # Generate session.id
+
+    # Seed initial world objects
+    for item in INITIAL_WORLD_OBJECTS:
+        obj = WorldObject(
+            session_id=session.id,
+            object_id=item["object_id"],
+            object_type=item["object_type"],
+            state_json=item["state_json"],
+        )
+        db.add(obj)
+
+    await db.commit()
+    return await get_game_session_detail(db, session.id, user_id)
+
+
+async def get_user_game_sessions(
+    db: AsyncSession, user_id: str
+) -> List[GameSession]:
+    """
+    Lists all game sessions belonging to the specified operator.
+    """
+    stmt = (
+        select(GameSession)
+        .where(GameSession.user_id == user_id)
+        .order_by(GameSession.updated_at.desc())
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_game_session_detail(
+    db: AsyncSession, session_id: str, user_id: str
+) -> Optional[GameSession]:
+    """
+    Reconstructs complete server-side session state including all dynamic world objects.
+    """
+    stmt = (
+        select(GameSession)
+        .options(selectinload(GameSession.world_objects))
+        .where(GameSession.id == session_id, GameSession.user_id == user_id)
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
+async def save_session_checkpoint(
+    db: AsyncSession,
+    session_id: str,
+    user_id: str,
+    save_name: str = "CHECKPOINT_MANUAL",
+    slot_number: int = 1,
+) -> Optional[SaveSlot]:
+    """
+    Captures an authoritative snapshot of the current session state and world objects into a save slot.
+    """
+    session = await get_game_session_detail(db, session_id, user_id)
+    if not session:
+        return None
+
+    # Construct authoritative state snapshot
+    world_objects_map = {
+        obj.object_id: obj.state_json for obj in session.world_objects
+    }
+    serialized_state = {
+        "current_chapter": session.current_chapter,
+        "current_sector": session.current_sector,
+        "system_integrity": session.system_integrity,
+        "corruption_level": session.corruption_level,
+        "debug_energy": session.debug_energy,
+        "world_objects": world_objects_map,
+    }
+
+    # Upsert save slot for this slot_number
     stmt = select(SaveSlot).where(
-        SaveSlot.user_id == user_id, SaveSlot.slot_number == save_in.slot_index
+        SaveSlot.user_id == user_id, SaveSlot.slot_number == slot_number
     )
     result = await db.execute(stmt)
     existing_save = result.scalars().first()
 
-    state_data = {
-        "sector": save_in.sector,
-        "corruption_level": save_in.corruption_level,
-        "player_integrity": save_in.player_integrity,
-        "current_objective": save_in.current_objective,
-        **save_in.world_state_data,
-    }
-
     if existing_save:
-        existing_save.save_name = save_in.save_name
-        existing_save.serialized_game_state = state_data
+        existing_save.game_session_id = session.id
+        existing_save.save_name = save_name
+        existing_save.serialized_game_state = serialized_state
         save_obj = existing_save
     else:
         save_obj = SaveSlot(
             user_id=user_id,
-            save_name=save_in.save_name,
-            slot_number=save_in.slot_index,
-            serialized_game_state=state_data,
+            game_session_id=session.id,
+            save_name=save_name,
+            slot_number=slot_number,
+            serialized_game_state=serialized_state,
         )
         db.add(save_obj)
 
@@ -43,46 +150,64 @@ async def save_game_state(
     return save_obj
 
 
-async def get_user_saves(db: AsyncSession, user_id: str) -> List[SaveSlot]:
-    stmt = (
-        select(SaveSlot)
-        .where(SaveSlot.user_id == user_id)
-        .order_by(SaveSlot.slot_number.asc())
-    )
-    result = await db.execute(stmt)
-    return list(result.scalars().all())
-
-
-async def get_save_by_slot(
-    db: AsyncSession, user_id: str, slot_index: int
-) -> Optional[SaveSlot]:
-    stmt = select(SaveSlot).where(
-        SaveSlot.user_id == user_id, SaveSlot.slot_number == slot_index
-    )
-    result = await db.execute(stmt)
-    return result.scalars().first()
-
-
-async def sync_world_session(
-    db: AsyncSession, session_id: str, sync_data: WorldStateSync, user_id: Optional[str] = None
-) -> GameSession:
-    stmt = select(GameSession).where(GameSession.id == session_id)
-    result = await db.execute(stmt)
-    session = result.scalars().first()
-
+async def load_session_checkpoint(
+    db: AsyncSession,
+    session_id: str,
+    user_id: str,
+    save_id: Optional[str] = None,
+    slot_number: Optional[int] = None,
+) -> Optional[GameSession]:
+    """
+    Restores session state and overwrites world objects from a saved checkpoint snapshot.
+    """
+    session = await get_game_session_detail(db, session_id, user_id)
     if not session:
-        session = GameSession(
-            id=session_id,
-            user_id=user_id or "anonymous_operator",
-            current_chapter="CHAPTER_00",
-            current_sector=sync_data.sector_name,
-            is_active=True,
+        return None
+
+    # Locate save slot
+    if save_id:
+        stmt = select(SaveSlot).where(
+            SaveSlot.id == save_id, SaveSlot.user_id == user_id
         )
-        db.add(session)
+    elif slot_number is not None:
+        stmt = select(SaveSlot).where(
+            SaveSlot.slot_number == slot_number, SaveSlot.user_id == user_id
+        )
     else:
-        session.current_sector = sync_data.sector_name
-        session.is_active = True
+        return None
+
+    result = await db.execute(stmt)
+    save_obj = result.scalars().first()
+    if not save_obj:
+        return None
+
+    state = save_obj.serialized_game_state
+    session.current_chapter = state.get("current_chapter", session.current_chapter)
+    session.current_sector = state.get("current_sector", session.current_sector)
+    session.system_integrity = state.get("system_integrity", session.system_integrity)
+    session.corruption_level = state.get("corruption_level", session.corruption_level)
+    session.debug_energy = state.get("debug_energy", session.debug_energy)
+
+    # Restore world objects
+    saved_objects = state.get("world_objects", {})
+    for obj in session.world_objects:
+        if obj.object_id in saved_objects:
+            obj.state_json = saved_objects[obj.object_id]
 
     await db.commit()
-    await db.refresh(session)
-    return session
+    return await get_game_session_detail(db, session_id, user_id)
+
+
+async def delete_game_session(
+    db: AsyncSession, session_id: str, user_id: str
+) -> bool:
+    """
+    Deletes a game session and cascades deletion of its world objects and logs.
+    """
+    session = await get_game_session_detail(db, session_id, user_id)
+    if not session:
+        return False
+
+    await db.delete(session)
+    await db.commit()
+    return True
