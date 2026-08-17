@@ -1,0 +1,96 @@
+import React, { useRef, useEffect } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { PointerLockControls } from '@react-three/drei';
+import * as THREE from 'three';
+import { usePlayerControls } from './usePlayerControls';
+
+interface FirstPersonPlayerProps {
+  onPositionChange?: (pos: { x: number; y: number; z: number }) => void;
+  isLocked: boolean;
+  setIsLocked: (locked: boolean) => void;
+}
+
+export const FirstPersonPlayer: React.FC<FirstPersonPlayerProps> = ({
+  onPositionChange,
+  isLocked,
+  setIsLocked,
+}) => {
+  const { camera } = useThree();
+  const controlsRef = useRef<any>(null);
+  const movement = usePlayerControls();
+
+  const velocity = useRef(new THREE.Vector3());
+  const direction = useRef(new THREE.Vector3());
+
+  // Spawn position inside the starting area of the server room
+  useEffect(() => {
+    camera.position.set(0, 1.65, 7.5);
+    camera.rotation.set(0, 0, 0);
+  }, [camera]);
+
+  useFrame((_, delta) => {
+    if (!isLocked) return;
+
+    const baseSpeed = movement.sprint ? 7.5 : 4.5;
+    const friction = 10.0;
+
+    // Dampen previous velocity
+    velocity.current.x -= velocity.current.x * friction * delta;
+    velocity.current.z -= velocity.current.z * friction * delta;
+
+    // Movement directions
+    direction.current.z = Number(movement.forward) - Number(movement.backward);
+    direction.current.x = Number(movement.right) - Number(movement.left);
+    direction.current.normalize();
+
+    if (movement.forward || movement.backward) {
+      velocity.current.z -= direction.current.z * baseSpeed * 10.0 * delta;
+    }
+    if (movement.left || movement.right) {
+      velocity.current.x -= direction.current.x * baseSpeed * 10.0 * delta;
+    }
+
+    // Move camera relative to direction
+    if (controlsRef.current) {
+      controlsRef.current.moveRight(-velocity.current.x * delta);
+      controlsRef.current.moveForward(-velocity.current.z * delta);
+    }
+
+    // Lock camera height (eye-level)
+    camera.position.y = 1.65;
+
+    // Environment Collision Bounding Boxes
+    // Main Server Room: X in [-5.5, 5.5], Z in [-2.0, 9.0]
+    // Secondary Corridor: X in [-1.8, 1.8], Z in [-15.0, -2.0]
+    // Locked Security Door at Z = -11.5 (until unlocked)
+    const pos = camera.position;
+
+    if (pos.z > -2.0) {
+      // Inside Main Room
+      pos.x = Math.max(-5.3, Math.min(5.3, pos.x));
+      pos.z = Math.max(-2.0, Math.min(8.6, pos.z));
+    } else {
+      // Inside Corridor leading towards security door
+      pos.x = Math.max(-1.6, Math.min(1.6, pos.x));
+      pos.z = Math.max(-11.2, Math.min(-2.0, pos.z)); // Stop at security door
+    }
+
+    if (onPositionChange) {
+      onPositionChange({
+        x: Number(camera.position.x.toFixed(2)),
+        y: Number(camera.position.y.toFixed(2)),
+        z: Number(camera.position.z.toFixed(2)),
+      });
+    }
+  });
+
+  return (
+    <PointerLockControls
+      ref={controlsRef}
+      onLock={() => setIsLocked(true)}
+      onUnlock={() => setIsLocked(false)}
+    />
+  );
+};
+
+export default FirstPersonPlayer;
