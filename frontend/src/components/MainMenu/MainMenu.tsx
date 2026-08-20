@@ -12,7 +12,9 @@ import {
   ShieldAlert, 
   Radio, 
   RotateCcw,
-  Binary
+  Binary,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 import { SaveLoadModal } from '../SaveLoadModal/SaveLoadModal';
@@ -70,6 +72,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
   const [telemetryCount, setTelemetryCount] = useState<number>(1024);
   const [saveModalOpen, setSaveModalOpen] = useState<boolean>(false);
   const [saveModalMode, setSaveModalMode] = useState<'SAVE' | 'LOAD' | 'MANAGE'>('LOAD');
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundEngine.getMuted());
 
   // Diagnostic hex telemetry ticker
   useEffect(() => {
@@ -189,6 +192,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({ onStartNewGame, onReboot }) 
             <Radio className="w-3 h-3 text-cyber-cyan" />
             QUANTUM SYNC: ACTIVE
           </span>
+
+          <button
+            onClick={() => {
+              const nextMuted = soundEngine.toggleMute();
+              setIsMuted(nextMuted);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1 bg-cyber-surfaceAlt/60 border rounded text-xs transition-all ${
+              isMuted
+                ? 'border-cyber-red/60 text-cyber-red hover:bg-cyber-red/10'
+                : 'border-cyber-border hover:border-cyber-cyan/60 text-cyber-textDim hover:text-cyber-cyan'
+            }`}
+            title={isMuted ? 'Unmute Audio Matrix' : 'Mute Audio Matrix'}
+          >
+            {isMuted ? (
+              <VolumeX className="w-3 h-3 text-cyber-red" />
+            ) : (
+              <Volume2 className="w-3 h-3 text-cyber-cyan" />
+            )}
+            <span>{isMuted ? 'MUTED' : 'AUDIO'}</span>
+          </button>
 
           {onReboot && (
             <button

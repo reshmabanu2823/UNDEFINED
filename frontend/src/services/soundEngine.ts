@@ -26,6 +26,11 @@ class CyberAudioEngine {
     return this.isMuted;
   }
 
+  public toggleMute(): boolean {
+    this.isMuted = !this.isMuted;
+    return this.isMuted;
+  }
+
   public playKeyTick() {
     if (this.isMuted) return;
     try {

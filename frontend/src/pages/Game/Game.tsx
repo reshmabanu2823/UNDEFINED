@@ -18,6 +18,8 @@ import {
   Activity,
   AlertTriangle,
   Save,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 
 // Reusable Corruption Effects
@@ -39,6 +41,7 @@ export interface GameProps {
 export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundEngine.getMuted());
   const { connectionStatus, isConnected } = useGameWebSocket();
 
   const { targeted, activeModal } = useInteractionState();
@@ -55,6 +58,11 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
   const nullEventStage = useWorldStore((state) => state.nullEventStage);
 
   const isInCorridor = playerPosition.z < -2.0;
+
+  const handleToggleMute = () => {
+    const nextMuted = soundEngine.toggleMute();
+    setIsMuted(nextMuted);
+  };
 
   return (
     <motion.div
@@ -155,6 +163,23 @@ export const Game: React.FC<GameProps> = ({ onReturnToMenu }) => {
           >
             <Save className="w-3.5 h-3.5" />
             <span>CHECKPOINTS</span>
+          </button>
+
+          <button
+            onClick={handleToggleMute}
+            className={`flex items-center gap-1.5 px-2.5 py-1 bg-cyber-surfaceAlt border rounded transition-all font-mono ${
+              isMuted
+                ? 'border-cyber-red/60 text-cyber-red hover:bg-cyber-red/10'
+                : 'border-cyber-border hover:border-cyber-cyan/60 text-cyber-textDim hover:text-cyber-cyan'
+            }`}
+            title={isMuted ? 'Unmute Audio Matrix' : 'Mute Audio Matrix'}
+          >
+            {isMuted ? (
+              <VolumeX className="w-3.5 h-3.5 text-cyber-red" />
+            ) : (
+              <Volume2 className="w-3.5 h-3.5" />
+            )}
+            <span className="text-[10px]">{isMuted ? 'MUTED' : 'AUDIO'}</span>
           </button>
 
           <div className="flex items-center gap-2">
